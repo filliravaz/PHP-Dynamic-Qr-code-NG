@@ -275,28 +275,56 @@ function base_url() {
  */
 function checkLoginRateLimit($username, $ip, $maxAttempts = 5, $decayMinutes = 15) {
     if (function_exists('getDbInstance')) {
+        $db = getDbInstance();
+        $cutoff = date('Y-m-d H:i:s', time() - ($decayMinutes * 60));
+
+        $createTableAndRetry = function() use ($db) {
+            $tableName = DATABASE_PREFIX . 'login_attempts';
+            $db->rawQuery("CREATE TABLE IF NOT EXISTS `{$tableName}` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `ip_address` varchar(45) NOT NULL,
+                `username` varchar(50) NOT NULL,
+                `attempted_at` datetime NOT NULL,
+                PRIMARY KEY (`id`),
+                KEY `idx_ip_time` (`ip_address`, `attempted_at`),
+                KEY `idx_user_time` (`username`, `attempted_at`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        };
+
+        $isTableMissing = function(\Throwable $e, $db) {
+            $msg = strtolower($e->getMessage());
+            $dbErr = strtolower((string)$db->getLastError());
+            return (
+                strpos($msg, "doesn't exist") !== false ||
+                strpos($msg, "unknown table") !== false ||
+                strpos($dbErr, "doesn't exist") !== false ||
+                strpos($dbErr, "unknown table") !== false ||
+                (method_exists($e, 'getCode') && (int)$e->getCode() === 1146)
+            );
+        };
+
         try {
-            $db = getDbInstance();
-            $cutoff = date('Y-m-d H:i:s', time() - ($decayMinutes * 60));
+            $ipAttempts = null;
+            try {
+                // Count attempts by IP
+                $db->where('ip_address', $ip);
+                $db->where('attempted_at >= ?', [$cutoff]);
+                $ipAttempts = $db->getValue('login_attempts', 'count(*)');
+            } catch (\Throwable $e) {
+                // Catch missing-table exception, create table and retry query
+                if ($isTableMissing($e, $db)) {
+                    $createTableAndRetry();
+                    $db->where('ip_address', $ip);
+                    $db->where('attempted_at >= ?', [$cutoff]);
+                    $ipAttempts = $db->getValue('login_attempts', 'count(*)');
+                } else {
+                    throw $e;
+                }
+            }
 
-            // Count attempts by IP
-            $db->where('ip_address', $ip);
-            $db->where('attempted_at >= ?', [$cutoff]);
-            $ipAttempts = $db->getValue('login_attempts', 'count(*)');
-
-            // If table doesn't exist (e.g. before upgrade migration), lazily create it only on error
+            // Retain existing null-result fallback if reachable without throwing
             if ($ipAttempts === null && strpos(strtolower((string)$db->getLastError()), "doesn't exist") !== false) {
-                $tableName = DATABASE_PREFIX . 'login_attempts';
-                $db->rawQuery("CREATE TABLE IF NOT EXISTS `{$tableName}` (
-                    `id` int(11) NOT NULL AUTO_INCREMENT,
-                    `ip_address` varchar(45) NOT NULL,
-                    `username` varchar(50) NOT NULL,
-                    `attempted_at` datetime NOT NULL,
-                    PRIMARY KEY (`id`),
-                    KEY `idx_ip_time` (`ip_address`, `attempted_at`),
-                    KEY `idx_user_time` (`username`, `attempted_at`)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-
+                $createTableAndRetry();
                 $db->where('ip_address', $ip);
                 $db->where('attempted_at >= ?', [$cutoff]);
                 $ipAttempts = $db->getValue('login_attempts', 'count(*)');
@@ -356,14 +384,15 @@ function recordLoginAttempt($username, $ip) {
 /**
  * Clear recorded attempts on successful authentication.
  */
-function clearLoginAttempts($username, $ip) {
+function clearLoginAttempts($username, $ip = null) {
+    if (empty($username) || !is_string($username) || trim($username) === '') {
+        return;
+    }
+
     if (function_exists('getDbInstance')) {
         try {
             $db = getDbInstance();
-            $db->where('ip_address', $ip);
-            if (!empty($username)) {
-                $db->orWhere('username', $username);
-            }
+            $db->where('username', trim($username));
             $db->delete('login_attempts');
         } catch (\Throwable $e) {
             error_log('clearLoginAttempts storage failure: ' . $e->getMessage());
