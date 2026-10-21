@@ -56,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $db->where('id', $paramId);
             if ($_SESSION['type'] !== 'super') {
-                $db->where('(id_owner = ? OR id_owner IS NULL)', [$_SESSION['user_id']]);
+                $db->where('id_owner', (int)$_SESSION['user_id']);
             }
 
             $row = $db->getOne("{$type}_qrcodes");
