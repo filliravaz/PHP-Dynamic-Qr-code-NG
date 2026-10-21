@@ -2,6 +2,9 @@ version: "3.2"
 services:
   php-dynamic-qrcode:
     image: "giandonatoinverso/php-dynamic-qr-code:latest"
+    build:
+      context: .
+      dockerfile: Dockerfile
     restart: "unless-stopped"
     environment:
       TYPE: "docker"
@@ -24,10 +27,11 @@ services:
       - php-dynamic-qrcode-network
 
   php-dynamic-qrcode-db:
-    image: "giandonatoinverso/php-dynamic-qr-code-db:latest"
+    image: "mariadb:11.4"
     restart: "unless-stopped"
     volumes:
       - php_dynamic_qrcode_db_data:/var/lib/mysql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
       - '13306:3306'
     environment:
@@ -40,7 +44,6 @@ services:
 
 volumes:
   php_dynamic_qrcode_db_data:
-  php_dynamic_qrcode_config_data:
   php_dynamic_qrcode_saved_qrcode_data:
 
 networks:
