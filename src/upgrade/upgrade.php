@@ -12,6 +12,14 @@ function outputMessage($message, $isCli) {
     }
 }
 
+function abortMigration($conn, $message, $isCli) {
+    outputMessage("Error: " . $message, $isCli);
+    if ($conn instanceof mysqli) {
+        $conn->close();
+    }
+    exit(1);
+}
+
 $conn = new mysqli(DATABASE_HOST, DATABASE_USER, DATABASE_PASSWORD, DATABASE_NAME, DATABASE_PORT);
 
 if ($conn->connect_error) {
@@ -20,14 +28,22 @@ if ($conn->connect_error) {
 
 // 1. Ensure schema_version table exists to track migrations across container restarts
 $versionTable = DATABASE_PREFIX . 'schema_version';
-$conn->query("CREATE TABLE IF NOT EXISTS `{$versionTable}` (
+$verCreate = $conn->query("CREATE TABLE IF NOT EXISTS `{$versionTable}` (
     `version` VARCHAR(20) NOT NULL,
     `applied_at` DATETIME NOT NULL,
     PRIMARY KEY (`version`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
+if ($verCreate === false) {
+    abortMigration($conn, "Failed to verify or create schema_version table: " . $conn->error, $isCli);
+}
+
 // 2. Check if TARGET_VERSION has already been applied
 $versionStmt = $conn->prepare("SELECT `applied_at` FROM `{$versionTable}` WHERE `version` = ?");
+if (!$versionStmt) {
+    abortMigration($conn, "Failed to prepare version check query: " . $conn->error, $isCli);
+}
+
 $targetVer = TARGET_VERSION;
 $versionStmt->bind_param('s', $targetVer);
 $versionStmt->execute();
@@ -35,10 +51,12 @@ $versionRes = $versionStmt->get_result();
 
 if ($versionRes && $versionRes->num_rows > 0) {
     $row = $versionRes->fetch_assoc();
+    $versionStmt->close();
     outputMessage("Database schema is already at version " . TARGET_VERSION . " (applied on " . $row['applied_at'] . "). No changes needed.", $isCli);
     $conn->close();
     exit;
 }
+$versionStmt->close();
 
 // 3. If accessed via browser, verify superadmin authentication and require CSRF-protected POST
 if (!$isCli) {
@@ -165,14 +183,10 @@ foreach ($backupTables as $alias => $tName) {
                 if ($conn->query("INSERT INTO `{$backupName}` SELECT * FROM `{$tName}`") === TRUE) {
                     outputMessage("Snapshot backup created: <code>{$backupName}</code>", $isCli);
                 } else {
-                    outputMessage("Error: Failed to copy rows into snapshot table `{$backupName}`: " . htmlspecialchars($conn->error), $isCli);
-                    $conn->close();
-                    exit(1);
+                    abortMigration($conn, "Failed to copy rows into snapshot table `{$backupName}`: " . $conn->error, $isCli);
                 }
             } else {
-                outputMessage("Error: Failed to create snapshot table `{$backupName}`: " . htmlspecialchars($conn->error), $isCli);
-                $conn->close();
-                exit(1);
+                abortMigration($conn, "Failed to create snapshot table `{$backupName}`: " . $conn->error, $isCli);
             }
         } else {
             outputMessage("Notice: Snapshot backup `{$backupName}` already exists; preserving existing snapshot.", $isCli);
@@ -183,72 +197,94 @@ foreach ($backupTables as $alias => $tName) {
 // 5. Apply migrations idempotently
 // Rename admin_accounts to users if needed
 $tableCheck = $conn->query("SHOW TABLES LIKE '" . DATABASE_PREFIX . "users'");
-if ($tableCheck && $tableCheck->num_rows > 0) {
+if ($tableCheck === false) {
+    abortMigration($conn, "Failed checking table users: " . $conn->error, $isCli);
+}
+
+if ($tableCheck->num_rows > 0) {
     outputMessage("Notice: Table '" . DATABASE_PREFIX . "users' already exists.", $isCli);
 } else {
     $oldCheck = $conn->query("SHOW TABLES LIKE '" . DATABASE_PREFIX . "admin_accounts'");
-    if ($oldCheck && $oldCheck->num_rows > 0) {
+    if ($oldCheck === false) {
+        abortMigration($conn, "Failed checking table admin_accounts: " . $conn->error, $isCli);
+    }
+    if ($oldCheck->num_rows > 0) {
         $sql = "ALTER TABLE " . DATABASE_PREFIX . "admin_accounts RENAME TO " . DATABASE_PREFIX . "users";
         if ($conn->query($sql) === TRUE) {
             outputMessage("The admin_accounts table has been renamed to users successfully.", $isCli);
         } else {
-            outputMessage("Error renaming table: " . htmlspecialchars($conn->error), $isCli);
+            abortMigration($conn, "Error renaming table admin_accounts: " . $conn->error, $isCli);
         }
     }
 }
 
 // Rename column user_name to username if present
 $colCheck = $conn->query("SHOW COLUMNS FROM " . DATABASE_PREFIX . "users LIKE 'user_name'");
-if ($colCheck && $colCheck->num_rows > 0) {
+if ($colCheck === false) {
+    abortMigration($conn, "Failed checking user_name column: " . $conn->error, $isCli);
+}
+if ($colCheck->num_rows > 0) {
     $sql = "ALTER TABLE " . DATABASE_PREFIX . "users CHANGE `user_name` `username` VARCHAR(50) NOT NULL";
     if ($conn->query($sql) === TRUE) {
         outputMessage("The user_name column has been renamed to username successfully.", $isCli);
     } else {
-        outputMessage("Error renaming column: " . htmlspecialchars($conn->error), $isCli);
+        abortMigration($conn, "Error renaming column user_name: " . $conn->error, $isCli);
     }
 }
 
 // Rename column admin_type to type if present
 $typeCheck = $conn->query("SHOW COLUMNS FROM " . DATABASE_PREFIX . "users LIKE 'admin_type'");
-if ($typeCheck && $typeCheck->num_rows > 0) {
+if ($typeCheck === false) {
+    abortMigration($conn, "Failed checking admin_type column: " . $conn->error, $isCli);
+}
+if ($typeCheck->num_rows > 0) {
     $sql = "ALTER TABLE " . DATABASE_PREFIX . "users CHANGE `admin_type` `type` VARCHAR(10) NOT NULL";
     if ($conn->query($sql) === TRUE) {
         outputMessage("The admin_type column was renamed to type successfully.", $isCli);
     } else {
-        outputMessage("Error renaming column: " . htmlspecialchars($conn->error), $isCli);
+        abortMigration($conn, "Error renaming column admin_type: " . $conn->error, $isCli);
     }
 }
 
 // Add must_change_password column to users if not present
 $mcpCheck = $conn->query("SHOW COLUMNS FROM " . DATABASE_PREFIX . "users LIKE 'must_change_password'");
-if ($mcpCheck && $mcpCheck->num_rows === 0) {
+if ($mcpCheck === false) {
+    abortMigration($conn, "Failed checking must_change_password column: " . $conn->error, $isCli);
+}
+if ($mcpCheck->num_rows === 0) {
     $sql = "ALTER TABLE " . DATABASE_PREFIX . "users ADD `must_change_password` TINYINT(1) NOT NULL DEFAULT 0 AFTER `type`";
     if ($conn->query($sql) === TRUE) {
         outputMessage("The must_change_password column has been added to users successfully.", $isCli);
     } else {
-        outputMessage("Error adding column: " . htmlspecialchars($conn->error), $isCli);
+        abortMigration($conn, "Error adding column must_change_password: " . $conn->error, $isCli);
     }
 }
 
 // Add id_owner to dynamic_qrcodes if not present
 $dynCheck = $conn->query("SHOW COLUMNS FROM " . DATABASE_PREFIX . "dynamic_qrcodes LIKE 'id_owner'");
-if ($dynCheck && $dynCheck->num_rows === 0) {
+if ($dynCheck === false) {
+    abortMigration($conn, "Failed checking id_owner column in dynamic_qrcodes: " . $conn->error, $isCli);
+}
+if ($dynCheck->num_rows === 0) {
     $sql = "ALTER TABLE " . DATABASE_PREFIX . "dynamic_qrcodes ADD `id_owner` INT(25) NULL DEFAULT NULL AFTER `id`";
     if ($conn->query($sql) === TRUE) {
         outputMessage("The id_owner column has been added to dynamic_qrcodes successfully.", $isCli);
     } else {
-        outputMessage("Error adding column: " . htmlspecialchars($conn->error), $isCli);
+        abortMigration($conn, "Error adding column id_owner to dynamic_qrcodes: " . $conn->error, $isCli);
     }
 }
 
 // Add id_owner to static_qrcodes if not present
 $statCheck = $conn->query("SHOW COLUMNS FROM " . DATABASE_PREFIX . "static_qrcodes LIKE 'id_owner'");
-if ($statCheck && $statCheck->num_rows === 0) {
+if ($statCheck === false) {
+    abortMigration($conn, "Failed checking id_owner column in static_qrcodes: " . $conn->error, $isCli);
+}
+if ($statCheck->num_rows === 0) {
     $sql = "ALTER TABLE " . DATABASE_PREFIX . "static_qrcodes ADD `id_owner` INT(25) NULL DEFAULT NULL AFTER `id`";
     if ($conn->query($sql) === TRUE) {
         outputMessage("The id_owner column has been added to static_qrcodes successfully.", $isCli);
     } else {
-        outputMessage("Error adding column: " . htmlspecialchars($conn->error), $isCli);
+        abortMigration($conn, "Error adding column id_owner to static_qrcodes: " . $conn->error, $isCli);
     }
 }
 
@@ -270,22 +306,30 @@ foreach ($qrTables as $tableKey => $tableName) {
         if ($recovered > 0) {
             outputMessage("Backfilled {$recovered} records in {$tableKey} from creator ownership data.", $isCli);
         }
+    } else {
+        abortMigration($conn, "Error backfilling ownership in {$tableKey}: " . $conn->error, $isCli);
     }
 
     // 2. Explicit operator assignment for remaining ownerless records
     if ($operatorId !== null) {
         $assignStmt = $conn->prepare("UPDATE `{$tableName}` SET `id_owner` = ? WHERE `id_owner` IS NULL OR `id_owner` = 0");
         if (!$assignStmt) {
-            outputMessage("Error preparing operator assignment query for {$tableKey}: " . htmlspecialchars($conn->error), $isCli);
-            $conn->close();
-            exit(1);
+            abortMigration($conn, "Error preparing operator assignment query for {$tableKey}: " . $conn->error, $isCli);
         }
-        $assignStmt->bind_param('i', $operatorId);
+        if (!$assignStmt->bind_param('i', $operatorId)) {
+            $err = $assignStmt->error;
+            $assignStmt->close();
+            abortMigration($conn, "Error binding parameter for operator assignment in {$tableKey}: " . $err, $isCli);
+        }
         if ($assignStmt->execute()) {
             $assigned = $conn->affected_rows;
             if ($assigned > 0) {
                 outputMessage("Assigned {$assigned} unowned records in {$tableKey} to operator ID {$operatorId}.", $isCli);
             }
+        } else {
+            $err = $assignStmt->error;
+            $assignStmt->close();
+            abortMigration($conn, "Error executing operator assignment in {$tableKey}: " . $err, $isCli);
         }
         $assignStmt->close();
     }
@@ -304,32 +348,54 @@ foreach ($qrTables as $tableKey => $tableName) {
 // Normalize legacy static_qrcodes content representation
 $staticTable = DATABASE_PREFIX . 'static_qrcodes';
 $legacyRows = $conn->query("SELECT `id`, `content` FROM `{$staticTable}` WHERE `content` LIKE '%&lt;strong&gt;%' OR `content` LIKE '%&lt;div%' OR `content` LIKE '%&lt;b&gt;%'");
-if ($legacyRows && $legacyRows->num_rows > 0) {
+if ($legacyRows === false) {
+    abortMigration($conn, "Error querying legacy static QR records: " . $conn->error, $isCli);
+}
+
+if ($legacyRows->num_rows > 0) {
     $upStmt = $conn->prepare("UPDATE `{$staticTable}` SET `content` = ? WHERE `id` = ?");
     if (!$upStmt) {
-        outputMessage("Error preparing static QR content normalization query: " . htmlspecialchars($conn->error), $isCli);
-        $conn->close();
-        exit(1);
+        abortMigration($conn, "Error preparing static QR content normalization query: " . $conn->error, $isCli);
     }
     $migrated = 0;
     while ($r = $legacyRows->fetch_assoc()) {
         $decoded = htmlspecialchars_decode($r['content'], ENT_QUOTES);
-        $upStmt->bind_param('si', $decoded, $r['id']);
+        if (!$upStmt->bind_param('si', $decoded, $r['id'])) {
+            $err = $upStmt->error;
+            $upStmt->close();
+            abortMigration($conn, "Error binding parameters for static QR normalization: " . $err, $isCli);
+        }
         if ($upStmt->execute()) {
             $migrated++;
+        } else {
+            $err = $upStmt->error;
+            $upStmt->close();
+            abortMigration($conn, "Error executing static QR normalization: " . $err, $isCli);
         }
     }
     $upStmt->close();
     outputMessage("Migrated {$migrated} legacy static QR code content records to standard format.", $isCli);
 }
 
-// 6. Record successful upgrade in schema_version table
+// 6. Record successful upgrade in schema_version table only after all migrations succeed
 $insertStmt = $conn->prepare("INSERT INTO `{$versionTable}` (`version`, `applied_at`) VALUES (?, NOW()) ON DUPLICATE KEY UPDATE `applied_at` = NOW()");
-if ($insertStmt) {
-    $insertStmt->bind_param('s', $targetVer);
-    $insertStmt->execute();
-    $insertStmt->close();
+if (!$insertStmt) {
+    abortMigration($conn, "Error preparing schema version record query: " . $conn->error, $isCli);
 }
+
+if (!$insertStmt->bind_param('s', $targetVer)) {
+    $err = $insertStmt->error;
+    $insertStmt->close();
+    abortMigration($conn, "Error binding schema version parameter: " . $err, $isCli);
+}
+
+if (!$insertStmt->execute()) {
+    $err = $insertStmt->error;
+    $insertStmt->close();
+    abortMigration($conn, "Error recording schema version: " . $err, $isCli);
+}
+
+$insertStmt->close();
 
 outputMessage("<strong>Upgrade completed successfully! Database is now at schema version " . TARGET_VERSION . ".</strong>", $isCli);
 

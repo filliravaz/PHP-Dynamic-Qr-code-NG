@@ -61,10 +61,11 @@
                 <td><?php echo htmlspecialchars($row['type'], ENT_QUOTES, 'UTF-8'); ?></td>
                 <td>
                     <?php
-                    $raw_content = $row['content'];
-                    $clean_content = preg_replace('/\s+on[a-z]+\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', $raw_content);
-                    $clean_content = preg_replace('/<(script|iframe|object|embed|style)\b[^>]*>(.*?)<\/\1>/is', '', $clean_content);
-                    echo strip_tags($clean_content, ['strong', 'b', 'br', 'div', 'span', 'p']);
+                    // Preserve only structural tags, then normalize all opening tags to attribute-free forms
+                    $clean_content = strip_tags($row['content'], ['strong', 'b', 'br', 'div', 'span', 'p']);
+                    $clean_content = preg_replace('/<(strong|b|div|span|p)(?:[\s\/][^>]*)?>/i', '<$1>', $clean_content);
+                    $clean_content = preg_replace('/<br(?:[\s\/][^>]*)?>/i', '<br>', $clean_content);
+                    echo $clean_content;
                     ?>
                 </td>
                 <td>
