@@ -58,9 +58,23 @@ LIVE DEMO CURRENTLY NOT AVAILABLE - Will be added once this fork reaches a "stab
 - Docker compose file
 
 ## Setup with docker compose
-1. Clone or checkout the repository (ensuring `Dockerfile` and `database/init.sql` are present locally alongside `docker-compose.yml`)
-2. Start docker stack
+
+### Option A: Run using published Docker image
+1. Download `docker-compose.yml` and `database/init.sql`.
+2. Start the stack (pulls prebuilt image `ghcr.io/filliravaz/php-dynamic-qr-code-ng:latest`):
 ```bash
-docker compose build --no-cache && docker compose up -d
+docker compose up -d
 ```
+
+### Option B: Build and run from source repository
+1. Clone this repository:
+```bash
+git clone https://github.com/filliravaz/PHP-Dynamic-Qr-code-NG.git
+cd PHP-Dynamic-Qr-code-NG
+```
+2. Build and start the stack:
+```bash
+docker compose up -d --build
+```
+
 3. Open your browser at http://localhost:80 and log in with the initial superadmin credential (username: `superadmin`, password: `superadmin`). You will be required to immediately change your password upon first login before accessing the application.

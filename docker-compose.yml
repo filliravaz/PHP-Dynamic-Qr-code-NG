@@ -1,12 +1,7 @@
 version: "3.2"
 services:
   php-dynamic-qrcode:
-    image: "giandonatoinverso/php-dynamic-qr-code:latest"
-    # Note: Requires a full repository checkout to ensure Dockerfile and database/init.sql are present locally
-    build:
-      context: .
-      dockerfile: Dockerfile
-    pull_policy: build
+    image: "ghcr.io/filliravaz/php-dynamic-qr-code-ng:latest"
     restart: "unless-stopped"
     environment:
       TYPE: "docker"
