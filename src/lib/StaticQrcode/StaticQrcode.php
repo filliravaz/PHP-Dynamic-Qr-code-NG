@@ -389,10 +389,12 @@ class StaticQrcode {
      * We save into db the url of qrcode image
      */
     private function addQrcode($type) {
-        if($_POST['id_owner'] != "")
-            $data_to_db['id_owner'] = $_POST['id_owner'];
-        else
-            $data_to_db['id_owner'] = NULL;
+        if ($_SESSION['type'] === 'super') {
+            $data_to_db['id_owner'] = !empty($_POST['id_owner']) ? (int)$_POST['id_owner'] : NULL;
+        } else {
+            $data_to_db['id_owner'] = (int)$_SESSION['user_id'];
+        }
+
         $data_to_db['created_at'] = date('Y-m-d H:i:s');
         $data_to_db['created_by'] = $_SESSION['user_id'];
         $data_to_db['filename'] = $this->qrcode_instance->sanitizeFilename($_POST['filename']);
@@ -420,10 +422,16 @@ class StaticQrcode {
      * 
      */
     public function editQrcode($input_data) {
-        if($input_data['id_owner'] != "")
-            $data_to_db['id_owner'] = $input_data['id_owner'];
-        else
-            $data_to_db['id_owner'] = NULL;
+        $existing = $this->getQrcode($input_data["id"]);
+        if ($_SESSION['type'] !== 'super') {
+            if (!isset($existing['id_owner']) || (int)$existing['id_owner'] !== (int)$_SESSION['user_id']) {
+                $this->failure("You cannot edit this qrcode because it belongs to another user");
+            }
+            $data_to_db['id_owner'] = (int)$_SESSION['user_id'];
+        } else {
+            $data_to_db['id_owner'] = !empty($input_data['id_owner']) ? (int)$input_data['id_owner'] : NULL;
+        }
+
         $data_to_db['filename'] = $this->qrcode_instance->sanitizeFilename($input_data['filename']);
         $data_to_db['created_at'] = date('Y-m-d H:i:s');
 

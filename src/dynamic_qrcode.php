@@ -10,6 +10,11 @@ $edit = false;
 if($_SERVER["REQUEST_METHOD"] === "GET" && isset($_GET["edit"]) && $_GET["edit"] == "true" && isset($_GET["id"])) {
     $edit = true;
     $dynamic_qrcode = $dynamic_qrcode_instance->getQrcode($_GET["id"]);
+    if ($_SESSION['type'] !== 'super' && (empty($dynamic_qrcode['id_owner']) || (int)$dynamic_qrcode['id_owner'] !== (int)$_SESSION['user_id'])) {
+        $_SESSION['failure'] = "You cannot edit this qrcode because it belongs to another user";
+        header('Location: dynamic_qrcodes.php');
+        exit();
+    }
 }
 
 if($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["del_id"])) {

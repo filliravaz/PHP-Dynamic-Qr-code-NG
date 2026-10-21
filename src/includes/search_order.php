@@ -16,12 +16,18 @@ if (!$order_by || !in_array($order_by, $allowed_columns, true)) {
 // Whitelist order direction strictly to ASC or DESC
 $order_dir = (strtoupper((string)$order_dir) === 'ASC') ? 'ASC' : 'DESC';
 
-// Build search query safely with parameter binding and whitelisted fields
+// Build search query safely with grouped parenthesized conditions and parameter binding
 if (!empty($search_str) && isset($search_fields) && is_array($search_fields)) {
+    $searchClauses = [];
+    $searchParams = [];
     foreach ($search_fields as $value) {
         if (in_array($value, $allowed_columns, true)) {
-            $db->orwhere($value, '%' . $search_str . '%', 'like');
+            $searchClauses[] = "`{$value}` LIKE ?";
+            $searchParams[] = '%' . $search_str . '%';
         }
+    }
+    if (!empty($searchClauses)) {
+        $db->where('(' . implode(' OR ', $searchClauses) . ')', $searchParams);
     }
 }
 
