@@ -52,18 +52,22 @@ services:
     #       docker rm -f test-mariadb && docker volume rm test_mariadb_data
     #
     # 3. Production Migration Procedure:
-    #    a. For existing installations, use a separate temporary migration container without mounting database/init.sql
+    #    a. Ensure the explicit network exists (or create it):
+    #       docker network create php-dynamic-qrcode-network
+    #    b. For existing installations, use a separate temporary migration container on php-dynamic-qrcode-network
+    #       with network alias php-dynamic-qrcode-db, without mounting database/init.sql
     #       (explicitly preventing init.sql from running on the fresh volume and falsely recording schema_version = 2.0.0):
-    #       docker run --name php-dynamic-qrcode-migration-db -d -p 13306:3306 -v php_dynamic_qrcode_db_data:/var/lib/mysql -e MYSQL_ROOT_PASSWORD=changeme -e MYSQL_DATABASE=qrcode -e MYSQL_USER=qrcode -e MYSQL_PASSWORD=changeme mariadb:11.4
-    #    b. Create client option file in migration container:
+    #       docker run --name php-dynamic-qrcode-migration-db -d -p 13306:3306 --network php-dynamic-qrcode-network --network-alias php-dynamic-qrcode-db -v php_dynamic_qrcode_db_data:/var/lib/mysql -e MYSQL_ROOT_PASSWORD=changeme -e MYSQL_DATABASE=qrcode -e MYSQL_USER=qrcode -e MYSQL_PASSWORD=changeme mariadb:11.4
+    #    c. Create client option file in migration container:
     #       docker exec php-dynamic-qrcode-migration-db sh -c "printf '[client]\nuser=root\npassword=changeme\n' > /tmp/my.cnf && chmod 600 /tmp/my.cnf"
-    #    c. Import legacy dump into MariaDB:
+    #    d. Import legacy dump into MariaDB:
     #       docker exec -i php-dynamic-qrcode-migration-db mariadb --defaults-extra-file=/tmp/my.cnf qrcode < qrcode_dump.sql
-    #    d. Run database schema upgrade CLI inside the PHP container before starting the application:
-    #       docker compose run --rm php-dynamic-qrcode php upgrade/upgrade.php
-    #    e. Clean up temporary migration container:
+    #    e. Run database schema upgrade CLI inside the PHP container before starting the application:
+    #       (using --no-deps so Compose connects to the running migration container alias without starting the service db):
+    #       docker compose run --rm --no-deps php-dynamic-qrcode php upgrade/upgrade.php
+    #    f. Clean up temporary migration container:
     #       docker rm -f php-dynamic-qrcode-migration-db
-    #    f. Start the full application stack (preserving existing init.sql mount below for fresh installations):
+    #    g. Start the full application stack (preserving existing init.sql mount below for fresh installations):
     #       docker compose up -d
     #
     # Fresh installations (no existing data) automatically use the mounted database/init.sql below.
@@ -85,7 +89,10 @@ services:
 
 volumes:
   php_dynamic_qrcode_db_data:
+    name: php_dynamic_qrcode_db_data
   php_dynamic_qrcode_saved_qrcode_data:
+    name: php_dynamic_qrcode_saved_qrcode_data
 
 networks:
   php-dynamic-qrcode-network:
+    name: php-dynamic-qrcode-network
