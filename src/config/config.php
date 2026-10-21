@@ -24,6 +24,16 @@ if (session_status() === PHP_SESSION_NONE) {
     }
 }
 
+if (!headers_sent()) {
+    header("X-Frame-Options: SAMEORIGIN");
+    header("X-Content-Type-Options: nosniff");
+    header("Referrer-Policy: strict-origin-when-cross-origin");
+    header("Content-Security-Policy: frame-ancestors 'self'");
+    if (isHttpsRequest()) {
+        header("Strict-Transport-Security: max-age=31536000; includeSubDomains");
+    }
+}
+
 define('CURRENT_PAGE', basename($_SERVER['REQUEST_URI']));
 define('SCRIPT_NAME', ltrim(dirname($_SERVER['SCRIPT_NAME']), '/'));
 

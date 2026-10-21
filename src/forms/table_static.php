@@ -61,15 +61,11 @@
                 <td><?php echo htmlspecialchars($row['type'], ENT_QUOTES, 'UTF-8'); ?></td>
                 <td>
                     <?php
-                    // Preserve only structural tags, then normalize all opening tags to attribute-free forms
-                    $clean_content = strip_tags((string)($row['content'] ?? ''), ['strong', 'b', 'br', 'div', 'span', 'p']);
-                    $clean_content = preg_replace('/<(strong|b|div|span|p)(?:[\s\/][^>]*)?>/i', '<$1>', $clean_content);
-                    $clean_content = preg_replace('/<br(?:[\s\/][^>]*)?>/i', '<br>', $clean_content);
-                    echo $clean_content;
+                    echo renderSafeStaticContent($row['content'] ?? '');
                     ?>
                 </td>
                 <td>
-                    <?php echo '<img src="'.SAVED_QRCODE_FOLDER.htmlspecialchars($row['qrcode'], ENT_QUOTES, 'UTF-8').'" width="100" height="100">'; ?>
+                    <?php echo '<img src="download.php?type=static&amp;id=' . (int)$row['id'] . '&amp;view=1" width="100" height="100" alt="QR Code">'; ?>
                 </td>
                 <td>
                     
@@ -85,7 +81,7 @@
                     ><i class="fas fa-trash"></i></a>
 
                     <!-- DOWNLOAD -->
-                    <a href="<?php echo SAVED_QRCODE_FOLDER.htmlspecialchars($row['qrcode'], ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-primary" download><i class="fa fa-download"></i></a>
+                    <a href="download.php?type=static&amp;id=<?php echo (int)$row['id']; ?>" class="btn btn-primary" download><i class="fa fa-download"></i></a>
                 </td>
             </tr>
             <?php endforeach; ?>

@@ -23,8 +23,15 @@ if (!$authUser || (int)($authUser['session_version'] ?? 1) !== (int)($_SESSION['
 $errors = [];
 $isFirstLogin = !empty($_SESSION['must_change_password']);
 
+$pwAttempts = $_SESSION['pwd_change_attempts'] ?? 0;
+$pwStart = $_SESSION['pwd_change_start'] ?? time();
+$isRateLimited = ((time() - $pwStart) < 900 && $pwAttempts >= 5);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!validateCsrfToken()) {
+    if ($isRateLimited) {
+        usleep(250000);
+        $errors[] = 'Too many failed password change attempts. Please wait 15 minutes before trying again.';
+    } elseif (!validateCsrfToken()) {
         $errors[] = 'Invalid or expired CSRF token. Please try again.';
     } else {
         $current_password = (string)($_POST['current_password'] ?? '');
@@ -36,6 +43,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $user = $db->getOne('users');
 
         if (!$user || !password_verify($current_password, $user['password'])) {
+            $_SESSION['pwd_change_attempts'] = $pwAttempts + 1;
+            if (empty($_SESSION['pwd_change_start'])) {
+                $_SESSION['pwd_change_start'] = time();
+            }
+            usleep(250000);
             $errors[] = 'Current password is incorrect.';
         } elseif (strlen($new_password) < 8) {
             $errors[] = 'New password must be at least 8 characters long.';
@@ -60,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 clearAuthCookie();
                 session_regenerate_id(true);
                 $_SESSION['session_version'] = $newSessionVersion;
-                unset($_SESSION['must_change_password']);
+                unset($_SESSION['must_change_password'], $_SESSION['pwd_change_attempts'], $_SESSION['pwd_change_start']);
                 $_SESSION['success'] = 'Password changed successfully! You may now access the application.';
                 header('Location: index.php');
                 exit;

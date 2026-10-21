@@ -1,4 +1,4 @@
-FROM php:8.4
+FROM php:8.4-apache
 
 RUN if [ "$(grep '^VERSION_ID=' /etc/os-release | cut -d '=' -f 2 | tr -d '"')" -eq "9" ]; then \
         sed -i -e 's/deb.debian.org/archive.debian.org/g' \
@@ -59,7 +59,8 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update -q \
       7.0.*|7.1.*) PHP_EXTENSIONS="$PHP_EXTENSIONS mcrypt";; \
     esac \
     && install-php-extensions $PHP_EXTENSIONS \
-    && if command -v a2enmod; then a2enmod rewrite; fi
+    && a2enmod rewrite headers \
+    && sed -ri -e 's!AllowOverride None!AllowOverride All!g' /etc/apache2/apache2.conf
 
 # Install Composer.
 ENV PATH=$PATH:/root/composer/vendor/bin \
@@ -75,18 +76,13 @@ RUN cd /opt \
   # Remove installer files.
   && rm /opt/composer-setup.php /opt/composer-setup.sha384sum
 
-RUN mkdir -p /opt && chmod 777 /opt
-WORKDIR /opt
-RUN git clone https://github.com/chillerlan/php-qrcode.git \
-        && chmod -R 777 ./php-qrcode
-RUN cp ./php-qrcode/composer.json /var/www/html/composer.json
-RUN mkdir -p /var/www/html/test && chmod 777 /var/www/html/test
-RUN cp ./php-qrcode/examples/image.php /var/www/html/test/image.php
-RUN cp -R ./php-qrcode/src /var/www/html/
-
 WORKDIR /var/www/html
-RUN composer update
+COPY composer.json ./
+RUN composer install --no-dev --optimize-autoloader --no-interaction
 COPY ./src ./
-RUN chmod 755 *;
+
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 755 /var/www/html
+
 EXPOSE 80
-CMD ["php", "-S", "0.0.0.0:80"]
+CMD ["apache2-foreground"]

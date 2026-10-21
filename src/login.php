@@ -1,7 +1,6 @@
 <?php
 require_once 'config/config.php';
 session_start();
-$token = bin2hex(random_bytes(16));
 
 // If User has already logged in, redirect to dashboard page.
 if (isset($_SESSION['user_logged_in']) && $_SESSION['user_logged_in'] === TRUE)
@@ -21,7 +20,7 @@ if (isset($_COOKIE['series_id']) && isset($_COOKIE['remember_token']))
 	$db->where('series_id', $series_id);
 	$row = $db->getOne('users');
 
-	if ($db->count >= 1)
+	if ($db->count >= 1 && !empty($row['remember_token']))
 	{
 		// User found. verify remember token
 		if (password_verify($remember_token, $row['remember_token']))
@@ -33,6 +32,32 @@ if (isset($_COOKIE['series_id']) && isset($_COOKIE['remember_token']))
                 header('Location: login.php');
                 exit;
             }
+
+            // SEC-04: Rotate remember-me token on each automatic login
+            $new_series_id = bin2hex(random_bytes(16));
+            $new_remember_token = bin2hex(random_bytes(32));
+            $encrypted_remember_token = password_hash($new_remember_token, PASSWORD_DEFAULT);
+            $expiry_time = date('Y-m-d H:i:s', strtotime(' + 30 days'));
+            $expires = strtotime($expiry_time);
+
+            $isSecure = isHttpsRequest();
+            $cookieOptions = [
+                'expires' => $expires,
+                'path' => '/',
+                'secure' => $isSecure,
+                'httponly' => true,
+                'samesite' => 'Lax'
+            ];
+
+            setcookie('series_id', $new_series_id, $cookieOptions);
+            setcookie('remember_token', $new_remember_token, $cookieOptions);
+
+            $db->where('id', (int)$row['id']);
+            $db->update('users', [
+                'series_id' => $new_series_id,
+                'remember_token' => $encrypted_remember_token,
+                'expires' => $expiry_time
+            ]);
 
             session_regenerate_id(true);
 			$_SESSION['user_logged_in'] = TRUE;
@@ -81,6 +106,7 @@ if (isset($_COOKIE['series_id']) && isset($_COOKIE['remember_token']))
       <p class="login-box-msg">Sign in to start your session</p>
 
       <form method="POST" action="authenticate.php">
+        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(getCsrfToken(), ENT_QUOTES, 'UTF-8'); ?>">
         <div class="input-group mb-3">
           <input type="text" name="username" class="form-control" placeholder="Username" required="required">
           <div class="input-group-append">
@@ -138,12 +164,12 @@ if (isset($_COOKIE['series_id']) && isset($_COOKIE['remember_token']))
 </div>
 <!-- /.login-box -->
 
-<!-- jQuery -->
-<script src="../../plugins/jquery/jquery.min.js"></script>
+<!-- jQuery (SEC-18) -->
+<script src="plugins/jquery/jquery.min.js"></script>
 <!-- Bootstrap 4 -->
-<script src="../../plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
 <!-- AdminLTE App -->
-<script src="../../dist/js/adminlte.js"></script>
+<script src="dist/js/adminlte.js"></script>
 
 </body>
 </html>

@@ -62,9 +62,14 @@ class DynamicQrcode {
             $data_to_db['id_owner'] = (int)$_SESSION['user_id'];
         }
 
+        $rawLink = trim($input_data['link'] ?? '');
+        if (!preg_match('/^https?:\/\//i', $rawLink) || !filter_var($rawLink, FILTER_VALIDATE_URL)) {
+            $this->failure("Invalid target URL. Only HTTP and HTTPS URLs are allowed.");
+        }
+
         $data_to_db['filename'] = $this->qrcode_instance->sanitizeFilename($input_data['filename']);
         $data_to_db['created_at'] = date('Y-m-d H:i:s');
-        $data_to_db['link'] = htmlspecialchars($input_data['link'], ENT_QUOTES, 'UTF-8');
+        $data_to_db['link'] = $rawLink;
         $data_to_db['created_by'] = $_SESSION['user_id'];
         $data_to_db['format'] = strtolower(trim($input_data['format'] ?? 'png'));
         $data_to_db['identifier'] = randomString(rand(5,8));
@@ -90,9 +95,14 @@ class DynamicQrcode {
             $data_to_db['id_owner'] = !empty($input_data['id_owner']) ? (int)$input_data['id_owner'] : NULL;
         }
 
+        $rawLink = trim($input_data['link'] ?? '');
+        if (!preg_match('/^https?:\/\//i', $rawLink) || !filter_var($rawLink, FILTER_VALIDATE_URL)) {
+            $this->failure("Invalid target URL. Only HTTP and HTTPS URLs are allowed.");
+        }
+
         $data_to_db['filename'] = $this->qrcode_instance->sanitizeFilename($input_data['filename']);
         $data_to_db['created_at'] = date('Y-m-d H:i:s');
-        $data_to_db['link'] = htmlspecialchars($input_data['link'], ENT_QUOTES, 'UTF-8');
+        $data_to_db['link'] = $rawLink;
         $data_to_db['state'] = in_array($input_data['state'], ['enable', 'disable'], true) ? $input_data['state'] : 'enable';
 
         $this->qrcode_instance->editQrcode($input_data, $data_to_db);
@@ -116,7 +126,7 @@ class DynamicQrcode {
             $users = new Users();
             $user = $users->getUser($_SESSION['user_id']);
 
-            if($user["id"] === $qrcode["id_owner"])
+            if(isset($user['id']) && (int)$user["id"] === (int)$qrcode["id_owner"])
                 $this->qrcode_instance->deleteQrcode($id, $async);
             else
                 $this->failure("You cannot delete this qrcode because it's of another user");

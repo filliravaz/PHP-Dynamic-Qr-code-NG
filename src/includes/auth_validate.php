@@ -21,6 +21,9 @@ if (!$authUser) {
 	exit;
 }
 
+// Synchronize session role with current database state
+$_SESSION['type'] = $authUser['type'];
+
 $currentSessionVersion = (int)($authUser['session_version'] ?? 1);
 $activeSessionVersion  = isset($_SESSION['session_version']) ? (int)$_SESSION['session_version'] : 0;
 

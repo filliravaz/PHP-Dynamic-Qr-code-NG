@@ -14,7 +14,13 @@ use chillerlan\QRCode\Output\QRCodeOutputException;
 use chillerlan\QRCode\Output\QROutputInterface;
 use chillerlan\Settings\SettingsContainerInterface;
 
-require_once __DIR__.'/../../vendor/autoload.php';
+if (file_exists(__DIR__ . '/../../vendor/autoload.php')) {
+    require_once __DIR__ . '/../../vendor/autoload.php';
+} elseif (defined('BASE_PATH') && file_exists(BASE_PATH . '/vendor/autoload.php')) {
+    require_once BASE_PATH . '/vendor/autoload.php';
+} elseif (defined('BASE_PATH') && file_exists(dirname(BASE_PATH) . '/vendor/autoload.php')) {
+    require_once dirname(BASE_PATH) . '/vendor/autoload.php';
+}
 
 class Qrcode {
     private string $table;

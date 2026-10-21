@@ -231,3 +231,212 @@ function base_url() {
         );
     }
 }
+
+/**
+ * Check rate limit for authentication actions.
+ * Limits by client IP (max 5 per 15 min) and by username (max 5 per 15 min).
+ *
+ * @param string|null $username
+ * @param string $ip
+ * @param int $maxAttempts
+ * @param int $decayMinutes
+ * @return bool True if allowed, false if rate limit exceeded.
+ */
+function checkLoginRateLimit($username, $ip, $maxAttempts = 5, $decayMinutes = 15) {
+    if (function_exists('getDbInstance')) {
+        try {
+            $db = getDbInstance();
+            $cutoff = date('Y-m-d H:i:s', time() - ($decayMinutes * 60));
+
+            // Count attempts by IP
+            $db->where('ip_address', $ip);
+            $db->where('attempted_at >= ?', [$cutoff]);
+            $ipAttempts = $db->getValue('login_attempts', 'count(*)');
+
+            // If table doesn't exist (e.g. fresh installation before init), lazily create it only on error
+            if ($ipAttempts === null && strpos(strtolower((string)$db->getLastError()), "doesn't exist") !== false) {
+                $tableName = DATABASE_PREFIX . 'login_attempts';
+                $db->rawQuery("CREATE TABLE IF NOT EXISTS `{$tableName}` (
+                    `id` int(11) NOT NULL AUTO_INCREMENT,
+                    `ip_address` varchar(45) NOT NULL,
+                    `username` varchar(50) NOT NULL,
+                    `attempted_at` datetime NOT NULL,
+                    PRIMARY KEY (`id`),
+                    KEY `idx_ip_time` (`ip_address`, `attempted_at`),
+                    KEY `idx_user_time` (`username`, `attempted_at`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+                $db->where('ip_address', $ip);
+                $db->where('attempted_at >= ?', [$cutoff]);
+                $ipAttempts = $db->getValue('login_attempts', 'count(*)');
+            }
+
+            if ($ipAttempts !== null && (int)$ipAttempts >= $maxAttempts) {
+                return false;
+            }
+
+            // Count attempts by username
+            if (!empty($username)) {
+                $db->where('username', $username);
+                $db->where('attempted_at >= ?', [$cutoff]);
+                $userAttempts = $db->getValue('login_attempts', 'count(*)');
+                if ($userAttempts !== null && (int)$userAttempts >= $maxAttempts) {
+                    return false;
+                }
+            }
+
+            return true;
+        } catch (\Throwable $e) {
+            // Fall through to session fallback
+        }
+    }
+
+    // Session fallback if database is unavailable
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $attempts = $_SESSION['login_rate_attempts'] ?? 0;
+        $start = $_SESSION['login_rate_start'] ?? time();
+        if ((time() - $start) < ($decayMinutes * 60)) {
+            if ($attempts >= $maxAttempts) {
+                return false;
+            }
+        } else {
+            $_SESSION['login_rate_attempts'] = 0;
+            $_SESSION['login_rate_start'] = time();
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Record a failed authentication attempt.
+ */
+function recordLoginAttempt($username, $ip) {
+    if (function_exists('getDbInstance')) {
+        try {
+            $db = getDbInstance();
+            $db->insert('login_attempts', [
+                'ip_address' => $ip,
+                'username' => (string)$username,
+                'attempted_at' => date('Y-m-d H:i:s')
+            ]);
+
+            // Periodic cleanup of attempts older than 24 hours
+            if (random_int(1, 20) === 1) {
+                $cutoff = date('Y-m-d H:i:s', time() - 86400);
+                $db->where('attempted_at < ?', [$cutoff]);
+                $db->delete('login_attempts');
+            }
+            return;
+        } catch (\Throwable $e) {
+            // Fall through to session
+        }
+    }
+
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        $_SESSION['login_rate_attempts'] = ($_SESSION['login_rate_attempts'] ?? 0) + 1;
+        if (empty($_SESSION['login_rate_start'])) {
+            $_SESSION['login_rate_start'] = time();
+        }
+    }
+}
+
+/**
+ * Clear recorded attempts on successful authentication.
+ */
+function clearLoginAttempts($username, $ip) {
+    if (function_exists('getDbInstance')) {
+        try {
+            $db = getDbInstance();
+            $db->where('ip_address', $ip);
+            if (!empty($username)) {
+                $db->orWhere('username', $username);
+            }
+            $db->delete('login_attempts');
+        } catch (\Throwable $e) {
+            // Ignore
+        }
+    }
+
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        unset($_SESSION['login_rate_attempts'], $_SESSION['login_rate_start']);
+    }
+}
+
+/**
+ * Safely parse and render static QR code display content without brittle regex tag stripping (SEC-09).
+ */
+function renderSafeStaticContent($rawContent) {
+    if ($rawContent === null || $rawContent === '') {
+        return '';
+    }
+
+    // Check if stored as JSON
+    $decoded = json_decode((string)$rawContent, true);
+    if (is_array($decoded)) {
+        $html = '';
+        foreach ($decoded as $key => $val) {
+            $html .= '<strong>' . htmlspecialchars((string)$key, ENT_QUOTES, 'UTF-8') . ':</strong> ' . htmlspecialchars((string)$val, ENT_QUOTES, 'UTF-8') . '<br>';
+        }
+        return $html;
+    }
+
+    if (!class_exists('DOMDocument')) {
+        return htmlspecialchars((string)$rawContent, ENT_QUOTES, 'UTF-8');
+    }
+
+    $dom = new DOMDocument();
+    libxml_use_internal_errors(true);
+    // Wrap in standard root node and load HTML
+    $dom->loadHTML('<?xml encoding="utf-8"?><div>' . (string)$rawContent . '</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+    libxml_clear_errors();
+
+    $allowedTags = ['strong', 'b', 'br', 'div', 'span', 'p'];
+    $allowedClasses = ['row', 'col-sm-4', 'col-sm-6', 'col-sm-12'];
+
+    $cleanNode = function($node, &$cleanNode) use ($allowedTags, $allowedClasses) {
+        if ($node->nodeType === XML_ELEMENT_NODE) {
+            $tagName = strtolower($node->nodeName);
+            if (!in_array($tagName, $allowedTags, true)) {
+                // Replace disallowed elements with their safe text content
+                $textNode = $node->ownerDocument->createTextNode($node->textContent);
+                $node->parentNode->replaceChild($textNode, $node);
+                return;
+            }
+
+            // Strip all attributes, preserving only strictly whitelisted structural class names
+            $class = $node->getAttribute('class');
+            while ($node->attributes->length > 0) {
+                $node->removeAttribute($node->attributes->item(0)->name);
+            }
+            if ($class !== '') {
+                $classParts = array_filter(explode(' ', $class));
+                $safeClasses = array_intersect($classParts, $allowedClasses);
+                if (!empty($safeClasses)) {
+                    $node->setAttribute('class', implode(' ', $safeClasses));
+                }
+            }
+        }
+
+        // Copy child nodes list as node replacement mutates live list
+        $children = [];
+        foreach ($node->childNodes as $child) {
+            $children[] = $child;
+        }
+        foreach ($children as $child) {
+            $cleanNode($child, $cleanNode);
+        }
+    };
+
+    $root = $dom->getElementsByTagName('div')->item(0);
+    if ($root) {
+        $cleanNode($root, $cleanNode);
+        $result = '';
+        foreach ($root->childNodes as $child) {
+            $result .= $dom->saveHTML($child);
+        }
+        return $result;
+    }
+
+    return htmlspecialchars((string)$rawContent, ENT_QUOTES, 'UTF-8');
+}

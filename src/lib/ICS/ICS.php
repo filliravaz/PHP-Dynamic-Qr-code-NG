@@ -151,7 +151,13 @@ class ICS {
     return $dt->format(self::DT_FORMAT);
   }
 
+  /**
+   * Escape special characters and newlines in compliance with RFC 5545 (SEC-17).
+   */
   private function escape_string($str) {
-    return preg_replace('/([\,;])/','\\\$1', $str);
+    $str = str_replace('\\', '\\\\', (string)$str);
+    $str = preg_replace('/([\,;])/', '\\\$1', $str);
+    $str = str_replace(["\r\n", "\r", "\n"], "\\n", $str);
+    return $str;
   }
 }

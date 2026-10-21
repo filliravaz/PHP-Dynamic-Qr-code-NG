@@ -11,7 +11,7 @@ services:
       DATABASE_PORT: "3306"
       DATABASE_NAME: "qrcode"
       DATABASE_USER: "qrcode"
-      DATABASE_PASSWORD: "changeme"
+      DATABASE_PASSWORD: "${MYSQL_PASSWORD:-changeme}"
       DATABASE_PREFIX: ""
       DATABASE_CHARSET: "utf8"
     ports:
@@ -77,12 +77,12 @@ services:
       - php_dynamic_qrcode_db_data:/var/lib/mysql
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
-      - '13306:3306'
+      - '127.0.0.1:13306:3306'
     environment:
-      MYSQL_ROOT_PASSWORD: "changeme"
-      MYSQL_DATABASE: "qrcode"
-      MYSQL_USER: "qrcode"
-      MYSQL_PASSWORD: "changeme"
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-changeme}"
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-qrcode}"
+      MYSQL_USER: "${MYSQL_USER:-qrcode}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:-changeme}"
     networks:
       - php-dynamic-qrcode-network
 

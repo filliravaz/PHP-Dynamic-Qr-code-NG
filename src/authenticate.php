@@ -5,9 +5,27 @@ session_start();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST')
 {
-	$username = filter_input(INPUT_POST, 'username');
-	$password = filter_input(INPUT_POST, 'password');
+	// Validate CSRF token (SEC-07)
+	if (!validateCsrfToken()) {
+		$_SESSION['login_failure'] = 'Invalid or expired session token. Please try again.';
+		header('Location: login.php');
+		exit;
+	}
+
+	$username = filter_input(INPUT_POST, 'username', FILTER_UNSAFE_RAW);
+	$username = is_string($username) ? trim($username) : '';
+	$password = (string)($_POST['password'] ?? '');
 	$remember = filter_input(INPUT_POST, 'remember');
+
+	$clientIp = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+
+	// Check rate limit: maximum 5 attempts per 15 minutes (SEC-07)
+	if (!checkLoginRateLimit($username, $clientIp, 5, 15)) {
+		usleep(250000);
+		$_SESSION['login_failure'] = 'Too many failed login attempts. Please wait 15 minutes before trying again.';
+		header('Location: login.php');
+		exit;
+	}
 
 	// Get DB instance.
 	$db = getDbInstance();
@@ -15,13 +33,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST')
 	$db->where('username', $username);
 	$row = $db->getOne('users');
 
-	if ($db->count >= 1)
+	if ($row && !empty($row['password']))
     {
 		$db_password = $row['password'];
 		$user_id = $row['id'];
 
 		if (password_verify($password, $db_password))
         {
+			// Authentication successful: clear failed attempts
+			clearLoginAttempts($username, $clientIp);
+
 			session_regenerate_id(true);
 			$_SESSION['user_logged_in'] = TRUE;
 			$_SESSION['type'] = $row['type'];
@@ -68,16 +89,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST')
 
 			// Authentication successful redirect user
 			header('Location: index.php');
+			exit;
 		}
         else
         {
+			recordLoginAttempt($username, $clientIp);
+			usleep(250000);
 			$_SESSION['login_failure'] = 'Invalid username or password';
 			header('Location: login.php');
+			exit;
 		}
-		exit;
 	}
     else
     {
+		recordLoginAttempt($username, $clientIp);
+		usleep(250000);
 		$_SESSION['login_failure'] = 'Invalid username or password';
 		header('Location: login.php');
 		exit;

@@ -14,7 +14,7 @@ $page = filter_input(INPUT_GET, 'page', FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?? 1
 $db->pageLimit = 15;
 
 if($_SESSION['type'] !== 'super') {
-    $db->where('(id_owner = ? OR id_owner IS NULL)', [$_SESSION['user_id']]);
+    $db->where('id_owner', (int)$_SESSION['user_id']);
 }
 
 $rows = $db->arraybuilder()->paginate('static_qrcodes', $page, $select);

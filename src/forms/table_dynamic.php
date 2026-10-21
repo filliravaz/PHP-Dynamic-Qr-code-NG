@@ -63,7 +63,7 @@
                 <td><?php echo htmlspecialchars($row['identifier'], ENT_QUOTES, 'UTF-8'); ?></td>
                 <td><?php echo htmlspecialchars($row['link'], ENT_QUOTES, 'UTF-8'); ?></td>
                 <td>
-                    <?php echo '<img src="'.SAVED_QRCODE_FOLDER.htmlspecialchars($row['qrcode'], ENT_QUOTES, 'UTF-8').'" width="100" height="100">'; ?>
+                    <?php echo '<img src="download.php?type=dynamic&amp;id=' . (int)$row['id'] . '&amp;view=1" width="100" height="100" alt="QR Code">'; ?>
                 </td>
                 <td><?php echo htmlspecialchars($row['scan'], ENT_QUOTES, 'UTF-8'); ?></td>
                 <td><?php echo htmlspecialchars($row['state'], ENT_QUOTES, 'UTF-8'); ?></td>
@@ -81,7 +81,7 @@
                     ><i class="fas fa-trash"></i></a>
                     
                     <!-- DOWNLOAD -->
-                    <a href="<?php echo SAVED_QRCODE_FOLDER.htmlspecialchars($row['qrcode'], ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-primary" download><i class="fa fa-download"></i></a>
+                    <a href="download.php?type=dynamic&amp;id=<?php echo (int)$row['id']; ?>" class="btn btn-primary" download><i class="fa fa-download"></i></a>
                 </td>
             </tr>
             <?php endforeach; ?>

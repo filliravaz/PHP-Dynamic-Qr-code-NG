@@ -487,14 +487,15 @@
         }
 
         if (res.status == 400 || res.status == 403) {
-          $('#err-msg').empty();
-          $('#err-msg').append('<i class="fas fa-exclamation-circle"></i> ' + res.data);
+          const $err = $('#err-msg').empty().append('<i class="fas fa-exclamation-circle"></i> ');
+          $err.append(document.createTextNode(' ' + (res.data || 'Error occurred')));
           $('#err-msg').css('display', 'block');
         }
       },
       error: (err) => {
-        $('#err-msg').empty();
-        $('#err-msg').append('<i class="fas fa-exclamation-circle"></i> ' + err.responseText);
+        const errorText = (err && err.responseText) ? err.responseText : 'An unexpected error occurred.';
+        const $err = $('#err-msg').empty().append('<i class="fas fa-exclamation-circle"></i> ');
+        $err.append(document.createTextNode(' ' + errorText));
         $('#err-msg').css('display', 'block');
         console.log(err);
       }

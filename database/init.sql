@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS `dynamic_qrcodes` (
   `updated_by` int(10) unsigned NOT NULL DEFAULT '0',
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `id_owner` (`id_owner`)
+  KEY `id_owner` (`id_owner`),
+  CONSTRAINT `fk_dynamic_owner` FOREIGN KEY (`id_owner`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `static_qrcodes` (
@@ -54,7 +55,18 @@ CREATE TABLE IF NOT EXISTS `static_qrcodes` (
   `updated_by` int(10) unsigned NOT NULL DEFAULT '0',
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `id_owner` (`id_owner`)
+  KEY `id_owner` (`id_owner`),
+  CONSTRAINT `fk_static_owner` FOREIGN KEY (`id_owner`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `login_attempts` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `ip_address` varchar(45) NOT NULL,
+  `username` varchar(50) NOT NULL,
+  `attempted_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_ip_time` (`ip_address`, `attempted_at`),
+  KEY `idx_user_time` (`username`, `attempted_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `schema_version` (

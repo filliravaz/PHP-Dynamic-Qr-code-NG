@@ -88,9 +88,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!is_dir($zipDir)) {
             mkdir($zipDir, 0755, true);
         }
+
+        // Clean up archives older than 1 hour to prevent storage exhaustion (SEC-03)
+        $now = time();
+        $existingZips = scandir($zipDir);
+        if ($existingZips !== false) {
+            foreach ($existingZips as $ez) {
+                if ($ez === '.' || $ez === '..' || $ez === '.htaccess') continue;
+                $targetFile = $zipDir . '/' . $ez;
+                if (is_file($targetFile) && ($now - filemtime($targetFile) > 3600)) {
+                    @unlink($targetFile);
+                }
+            }
+        }
+
         $relative_dir = $zipDir . '/qrcodes_' . $uniqid . '.zip';
         @unlink($relative_dir);
-        $url_path = SAVED_QRCODE_URL . 'zip/qrcodes_' . $uniqid . '.zip';
+        $url_path = 'download.php?zip=' . $uniqid;
 
         if ($zip->open($relative_dir, ZipArchive::CREATE) === TRUE) {
             foreach ($files as $file) {

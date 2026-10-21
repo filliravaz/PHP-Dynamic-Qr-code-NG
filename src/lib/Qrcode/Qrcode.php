@@ -113,15 +113,17 @@ class Qrcode {
         $filename = $this->getSafeFilePath($data_to_db['filename'], $data_to_db['format']);
 
         if(!file_exists($filename)){
-            $url =
-                'https://api.qrserver.com/v1/create-qr-code/?data='.
-                $data_to_qrcode.
-                '&amp;&size='.$options['size'].'x'.$options['size'].
-                '&ecc='.$options['errorCorrectionLevel'].
-                '&margin=0&color='.$options['foreground'].
-                '&bgcolor='.$options['background'].
-                '&qzone=2'.
-                '&format='.$data_to_db['format'];
+            $queryParams = [
+                'data' => $data_to_qrcode,
+                'size' => $options['size'] . 'x' . $options['size'],
+                'ecc' => $options['errorCorrectionLevel'],
+                'margin' => '0',
+                'color' => $options['foreground'],
+                'bgcolor' => $options['background'],
+                'qzone' => '2',
+                'format' => $data_to_db['format']
+            ];
+            $url = 'https://api.qrserver.com/v1/create-qr-code/?' . http_build_query($queryParams);
 
             $content = @file_get_contents($url);
             if ($content === false) {

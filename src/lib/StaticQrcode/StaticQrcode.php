@@ -128,7 +128,7 @@ class StaticQrcode {
     public function whatsappQrcode($country_code, $phone_number, $message)
     {
         if($phone_number != NULL){
-            $this->sData = 'https://wa.me/'.$country_code.$phone_number.'?text='.$message;  
+            $this->sData = 'https://wa.me/' . rawurlencode($country_code . $phone_number) . '?text=' . rawurlencode($message);  
             $this->sContent = '<strong>Phone number:</strong> ' . htmlspecialchars($country_code . $phone_number, ENT_QUOTES, 'UTF-8') . '<br>' .
                               '<strong>Message:</strong> ' . htmlspecialchars($message, ENT_QUOTES, 'UTF-8');
 
@@ -238,9 +238,6 @@ class StaticQrcode {
     public function eventQrcode($title, $start, $end, $timezone, $location, $description, $url)
     {
         if($title != NULL && $start != NULL && $end != NULL){
-            header('Content-Type: text/calendar; charset=utf-8');
-            header('Content-Disposition: attachment; filename=invite.ics');
-
             $timezoneFrom = $timezone;
 
             if(empty($timezoneFrom)){
@@ -331,7 +328,16 @@ class StaticQrcode {
     public function paypalQrcode($payment_type, $email, $item_name, $item_id, $amount, $currency, $shipping, $tax_rate)
     {
         if($email != NULL && $item_name != NULL && $amount != NULL){
-            $this->sData = 'https://www.paypal.com/webapps/xorouter?cmd='.$payment_type.'&business='.$email.'&item_name='.$item_name.'&item_number='.$item_id.'&amount='.$amount.'&currency_code='.$currency.'&shipping='.$shipping.'&tax_rate='.$tax_rate;
+            $this->sData = 'https://www.paypal.com/webapps/xorouter?' . http_build_query([
+                'cmd' => $payment_type,
+                'business' => $email,
+                'item_name' => $item_name,
+                'item_number' => $item_id,
+                'amount' => $amount,
+                'currency_code' => $currency,
+                'shipping' => $shipping,
+                'tax_rate' => $tax_rate
+            ]);
             
             $this->sContent = '<div class="row"><div class="col-sm-4">';
             
@@ -365,7 +371,14 @@ class StaticQrcode {
     public function bitcoinQrcode($address, $amount, $label, $message)
     {
         if($address != NULL && $amount != NULL){
-            $this->sData = 'bitcoin:'.$address.'?amount='.$amount.'&label='.$label.'&message='.$message;
+            $btcParams = ['amount' => $amount];
+            if ($label !== null && $label !== '') {
+                $btcParams['label'] = $label;
+            }
+            if ($message !== null && $message !== '') {
+                $btcParams['message'] = $message;
+            }
+            $this->sData = 'bitcoin:' . rawurlencode($address) . '?' . http_build_query($btcParams);
             $this->sContent = '<strong>BTC address:</strong> ' . htmlspecialchars($address, ENT_QUOTES, 'UTF-8') . '<br>' .
                               '<strong>Amount:</strong> ' . htmlspecialchars($amount, ENT_QUOTES, 'UTF-8') . '<br>' .
                               '<strong>Label:</strong> ' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '<br>' .
@@ -486,7 +499,7 @@ class StaticQrcode {
             $users = new Users();
             $user = $users->getUser($_SESSION['user_id']);
 
-            if($user["id"] === $qrcode["id_owner"])
+            if(isset($user['id']) && (int)$user["id"] === (int)$qrcode["id_owner"])
                 $this->qrcode_instance->deleteQrcode($id, $async);
             else
                 $this->failure("You cannot delete this qrcode because it's of another user");

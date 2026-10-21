@@ -33,19 +33,14 @@ class Users
 
     public function getAllUsers() {
         $db = getDbInstance();
-        return $db->get(DATABASE_PREFIX.'users');
+        return $db->get('users');
     }
 
     public function getUser($id) {
         $db = getDbInstance();
 
         $db->where('id', $id);
-        $result = $db->getOne('users');
-
-        if($result !== NULL)
-            return $result;
-        else
-            $this->failure("User not found");
+        return $db->getOne('users');
     }
     
     /**
@@ -98,6 +93,15 @@ class Users
         $data_to_db["username"] = $input_data["username"];
         $data_to_db["type"] = $input_data["type"];
 
+        $roleChanged = ($currentUser && isset($currentUser['type']) && $currentUser['type'] !== $input_data['type']);
+        if ($roleChanged && empty($data_to_db['session_version'])) {
+            $data_to_db['session_version'] = (int)($currentUser['session_version'] ?? 1) + 1;
+            if (isset($_SESSION['user_id']) && (int)$_SESSION['user_id'] === (int)$input_data['id']) {
+                $_SESSION['session_version'] = $data_to_db['session_version'];
+                $_SESSION['type'] = $input_data['type'];
+            }
+        }
+
         if (!empty($input_data['password'])) {
             $isSamePassword = (!empty($currentUser['password']) && password_verify($input_data['password'], $currentUser['password']));
             if (!$isSamePassword) {
@@ -139,6 +143,12 @@ class Users
         }
         
         $db = getDbInstance();
+        // Disassociate orphaned QR codes before deleting user
+        $db->where('id_owner', $id);
+        $db->update('dynamic_qrcodes', ['id_owner' => null]);
+        $db->where('id_owner', $id);
+        $db->update('static_qrcodes', ['id_owner' => null]);
+
         $db->where('id', $id);
         $stat = $db->delete('users');
 
