@@ -19,23 +19,25 @@
 
                     if(isset($static_qrcode['id_owner'])) {
                         $owner = $users_instance->getUser($static_qrcode['id_owner']);
-                        echo "<option selected value=\"" . $owner["id"] . "\">" . $owner["username"] . "</option>";
+                        if ($owner) {
+                            echo "<option selected value=\"" . (int)$owner["id"] . "\">" . htmlspecialchars($owner["username"], ENT_QUOTES, 'UTF-8') . "</option>";
+                        }
                         echo "<option value=\"\">All</option>";
                     }
 
                     $users = $users_instance->getAllUsers();
                     foreach ($users as $user) {
                         ?>
-                        <option value="<?php echo $user["id"];?>"><?php echo $user["username"];?></option>
+                        <option value="<?php echo (int)$user["id"];?>"><?php echo htmlspecialchars($user["username"], ENT_QUOTES, 'UTF-8');?></option>
                     <?php } ?>
                 </select>
             </div>
         </div>
     <?php } else { ?>
-        <input type="hidden" name="id_owner" value="<?php echo $_SESSION["user_id"];?>"/>
+        <input type="hidden" name="id_owner" value="<?php echo (int)$_SESSION["user_id"];?>"/>
     <?php } ?>
 
-    <input type="hidden" name="id" value="<?php echo $static_qrcode['id'];?>"/>
+    <input type="hidden" name="id" value="<?php echo (int)$static_qrcode['id'];?>"/>
     <input type="hidden" name="edit" value="true"/>
-    <input type="hidden" name="old_filename" value="<?php echo $static_qrcode['filename'];?>"/>
+    <input type="hidden" name="old_filename" value="<?php echo htmlspecialchars($static_qrcode['filename'], ENT_QUOTES, 'UTF-8');?>"/>
 </fieldset>

@@ -41,8 +41,8 @@
         <tbody>
             <?php foreach ($rows as $row): ?>
             <tr>
-                <td><input type="checkbox" name="action[]" value="<?=$row['id']?>" onchange="updateBulkActionVisibility()"></td>
-                <td><?php echo $row['id']; ?></td>
+                <td><input type="checkbox" name="action[]" value="<?=(int)$row['id']?>" onchange="updateBulkActionVisibility()"></td>
+                <td><?php echo (int)$row['id']; ?></td>
                 <td>
                     <?php
                     if(!isset($row['id_owner']))
@@ -52,35 +52,35 @@
                         $users = new Users();
                         $user = $users->getUser($row['id_owner']);
                         if($user !== NULL)
-                            echo $user["username"];
+                            echo htmlspecialchars($user["username"], ENT_QUOTES, 'UTF-8');
                         else
                             echo "";
                     }
                     ?>
                 </td>
-                <td><?php echo htmlspecialchars($row['filename']); ?></td>
-                <td><?php echo htmlspecialchars($row['identifier']); ?></td>
-                <td><?php echo htmlspecialchars($row['link']); ?></td>
+                <td><?php echo htmlspecialchars($row['filename'], ENT_QUOTES, 'UTF-8'); ?></td>
+                <td><?php echo htmlspecialchars($row['identifier'], ENT_QUOTES, 'UTF-8'); ?></td>
+                <td><?php echo htmlspecialchars($row['link'], ENT_QUOTES, 'UTF-8'); ?></td>
                 <td>
-                    <?php echo '<img src="'.SAVED_QRCODE_FOLDER.htmlspecialchars($row['qrcode']).'" width="100" height="100">'; ?>
+                    <?php echo '<img src="'.SAVED_QRCODE_FOLDER.htmlspecialchars($row['qrcode'], ENT_QUOTES, 'UTF-8').'" width="100" height="100">'; ?>
                 </td>
-                <td><?php echo htmlspecialchars($row['scan']); ?></td>
-                <td><?php echo htmlspecialchars($row['state']); ?></td>
+                <td><?php echo htmlspecialchars($row['scan'], ENT_QUOTES, 'UTF-8'); ?></td>
+                <td><?php echo htmlspecialchars($row['state'], ENT_QUOTES, 'UTF-8'); ?></td>
                 <td>
                     
                     <!-- EDIT -->
-                    <a href="dynamic_qrcode.php?edit=true&id=<?php echo $row['id']; ?>" class="btn btn-primary"><i class="fas fa-edit"></i></a>
+                    <a href="dynamic_qrcode.php?edit=true&id=<?php echo (int)$row['id']; ?>" class="btn btn-primary"><i class="fas fa-edit"></i></a>
                     
                     <!-- DELETE -->
                     <a
                             class="btn btn-danger delete_btn"
                             data-toggle="modal"
                             data-target="#delete-modal"
-                            data-del_id="<?php echo $row["id"];?>"
+                            data-del_id="<?php echo (int)$row["id"];?>"
                     ><i class="fas fa-trash"></i></a>
                     
                     <!-- DOWNLOAD -->
-                    <a href="<?php echo SAVED_QRCODE_FOLDER.htmlspecialchars($row['qrcode']); ?>" class="btn btn-primary" download><i class="fa fa-download"></i></a>
+                    <a href="<?php echo SAVED_QRCODE_FOLDER.htmlspecialchars($row['qrcode'], ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-primary" download><i class="fa fa-download"></i></a>
                 </td>
             </tr>
             <?php endforeach; ?>
