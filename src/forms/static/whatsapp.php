@@ -1,4 +1,5 @@
 <form class="form" action="static_qrcode.php?type=whatsapp" method="post" id="static_form" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="<?php echo getCsrfToken(); ?>"/>
     <?php include BASE_PATH.'/forms/qrcode_options.php'; ?>
 <!-- Input forms -->
 <div class="col-sm-12 mb-2">
