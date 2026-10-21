@@ -540,15 +540,19 @@ function getAppVersionInfo(): array {
     }
 
     // 2. Git inspection fallback when running in a live development git working tree
-    if (($commit === '' || $channel === '') && is_dir($basePath . '/../.git')) {
+    if (($commit === '' || $channel === '' || $version === '') && is_dir($basePath . '/../.git')) {
         $repoRoot = realpath($basePath . '/..');
         if ($repoRoot) {
             // Check if current HEAD matches an exact release tag
             if ($version === '' || $channel === '') {
                 $tagOutput = @shell_exec('git -C ' . escapeshellarg($repoRoot) . ' describe --tags --exact-match 2>/dev/null');
                 if (is_string($tagOutput) && trim($tagOutput) !== '') {
-                    $version = ltrim(trim($tagOutput), 'v');
-                    $channel = 'LTS';
+                    if ($version === '') {
+                        $version = ltrim(trim($tagOutput), 'v');
+                    }
+                    if ($channel === '') {
+                        $channel = 'LTS';
+                    }
                 }
             }
 
