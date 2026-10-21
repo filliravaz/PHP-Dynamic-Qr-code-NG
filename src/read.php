@@ -1,5 +1,5 @@
 <?php
-include 'config/config.php';
+require_once 'config/config.php';
 
 if ($_SERVER["REQUEST_METHOD"] !== "GET" || !isset($_GET['id'])) {
     die("Method not allowed. Check id parameter");

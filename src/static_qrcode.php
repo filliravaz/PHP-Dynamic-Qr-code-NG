@@ -1,6 +1,6 @@
 <?php
-session_start();
 require_once 'config/config.php';
+session_start();
 require_once BASE_PATH.'/includes/auth_validate.php';
 require_once BASE_PATH . '/lib/StaticQrcode/StaticQrcode.php';
 

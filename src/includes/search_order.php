@@ -1,5 +1,4 @@
 <?php
-require_once BASE_PATH . '/config/config.php';
 
 // Get Input data from query string
 $order_by	= filter_input(INPUT_GET, 'order_by', FILTER_DEFAULT);

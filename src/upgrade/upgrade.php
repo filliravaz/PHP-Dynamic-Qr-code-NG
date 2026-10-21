@@ -60,10 +60,17 @@ $versionStmt->close();
 
 // 3. If accessed via browser, verify superadmin authentication and require CSRF-protected POST
 if (!$isCli) {
+    require_once dirname(__DIR__) . '/helpers/helpers.php';
     if (session_status() === PHP_SESSION_NONE) {
+        $isSecure = isHttpsRequest();
+        ini_set('session.cookie_httponly', '1');
+        ini_set('session.use_only_cookies', '1');
+        ini_set('session.cookie_samesite', 'Lax');
+        if ($isSecure) {
+            ini_set('session.cookie_secure', '1');
+        }
         session_start();
     }
-    require_once dirname(__DIR__) . '/helpers/helpers.php';
 
     /**
      * Legacy installation note:
