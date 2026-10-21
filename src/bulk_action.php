@@ -17,6 +17,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 
+    $csrfToken = $json['csrf_token'] ?? ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
+    if (!validateCsrfToken($csrfToken)) {
+        echo json_encode([
+            'data' => 'Invalid or missing CSRF token.',
+            'status' => 403
+        ]);
+        exit();
+    }
+
     if (!isset($json['type']) || !in_array($json['type'], ['dynamic', 'static'], true)) {
         echo json_encode([
             'data' => 'Invalid or missing type field in the request.',

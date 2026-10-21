@@ -56,6 +56,7 @@
                 </div>
                 <div class="modal-body">
                     <input type="hidden" name="del_id" id="del_id" value="">
+                    <input type="hidden" name="csrf_token" value="<?php echo getCsrfToken(); ?>">
                     <p>Are you sure you want to delete this row</p>
                 </div>
                 <div class="modal-footer">

@@ -458,15 +458,21 @@
       }
     });
 
+    const csrfToken = $('input[name=csrf_token]').val() || '';
+
     const data = {
       action: $('select[name=action]').val(),
       params: params,
-      type: $('input[name=type]').val()
+      type: $('input[name=type]').val(),
+      csrf_token: csrfToken
     }
 
     $.ajax({
       url: './bulk_action.php',
       method: "POST",
+      headers: {
+        'X-CSRF-Token': csrfToken
+      },
       data: JSON.stringify(data),
       dataType: "json",
       contentType: 'application/json',
@@ -480,7 +486,7 @@
           }
         }
 
-        if (res.status == 400) {
+        if (res.status == 400 || res.status == 403) {
           $('#err-msg').empty();
           $('#err-msg').append('<i class="fas fa-exclamation-circle"></i> ' + res.data);
           $('#err-msg').css('display', 'block');

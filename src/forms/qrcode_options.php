@@ -91,6 +91,8 @@ if (QRCODE_GENERATOR === "internal-chillerlan.qrcode") {
   </div>
 </div>
 
+<input type="hidden" name="csrf_token" value="<?php echo getCsrfToken(); ?>"/>
+
 <?php if($_SESSION['type'] ===  'super') { ?>
     <div class="col-sm-12 mb-2">
         <div class="row">

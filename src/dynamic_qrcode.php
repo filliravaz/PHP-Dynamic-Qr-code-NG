@@ -17,32 +17,36 @@ if($_SERVER["REQUEST_METHOD"] === "GET" && isset($_GET["edit"]) && $_GET["edit"]
     }
 }
 
-if($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["del_id"])) {
-    $dynamic_qrcode_instance->deleteQrcode($_POST["del_id"]);
-}
+if($_SERVER["REQUEST_METHOD"] === "POST") {
+    if (!validateCsrfToken()) {
+        $_SESSION['failure'] = "Invalid or missing CSRF token";
+        header('Location: dynamic_qrcodes.php');
+        exit();
+    }
 
-if($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["edit"])) {
-    if(
+    if(isset($_POST["del_id"])) {
+        $dynamic_qrcode_instance->deleteQrcode($_POST["del_id"]);
+    } else if(isset($_POST["edit"])) {
+        if(
             isset($_POST["identifier"]) &&
             isset($_POST["filename"]) &&
             isset($_POST["link"]) &&
             isset($_POST["state"]) &&
             isset($_POST["id_owner"]) &&
             isset($_POST["id"])
-    )
-        $dynamic_qrcode_instance->editQrcode($_POST);
-}
-
-if($_SERVER["REQUEST_METHOD"] === "POST" && !isset($_POST["edit"])) {
-    if(
-        isset($_POST["foreground"]) &&
-        isset($_POST["background"]) &&
-        isset($_POST["link"]) &&
-        isset($_POST["filename"]) &&
-        isset($_POST["format"]) &&
-        isset($_POST["id_owner"])
-    )
-        $dynamic_qrcode_instance->addQrcode($_POST);
+        )
+            $dynamic_qrcode_instance->editQrcode($_POST);
+    } else {
+        if(
+            isset($_POST["foreground"]) &&
+            isset($_POST["background"]) &&
+            isset($_POST["link"]) &&
+            isset($_POST["filename"]) &&
+            isset($_POST["format"]) &&
+            isset($_POST["id_owner"])
+        )
+            $dynamic_qrcode_instance->addQrcode($_POST);
+    }
 }
 ?>
 <!DOCTYPE html>

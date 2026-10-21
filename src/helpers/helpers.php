@@ -35,6 +35,35 @@ function getSecureRandomToken() {
 }
 
 /**
+ * Generate CSRF token and store it in session
+ */
+function getCsrfToken() {
+	if (session_status() === PHP_SESSION_NONE) {
+		session_start();
+	}
+	if (empty($_SESSION['csrf_token'])) {
+		$_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+	}
+	return $_SESSION['csrf_token'];
+}
+
+/**
+ * Validate CSRF token from request
+ */
+function validateCsrfToken($token = null) {
+	if (session_status() === PHP_SESSION_NONE) {
+		session_start();
+	}
+	if ($token === null) {
+		$token = $_POST['csrf_token'] ?? '';
+	}
+	if (empty($_SESSION['csrf_token']) || empty($token) || !hash_equals($_SESSION['csrf_token'], $token)) {
+		return false;
+	}
+	return true;
+}
+
+/**
  * Clear Auth Cookie
  */
 function clearAuthCookie() {

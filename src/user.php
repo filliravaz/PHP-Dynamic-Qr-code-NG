@@ -16,27 +16,29 @@ if($_SERVER["REQUEST_METHOD"] === "GET" && isset($_GET["edit"]) && $_GET["edit"]
     $user = $user_instance->getUser($_GET["id"]);
 }
 
-if($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["del_id"])) {
-    $user_instance->deleteUser($_POST["del_id"]);
-}
+if($_SERVER["REQUEST_METHOD"] === "POST") {
+    if (!validateCsrfToken()) {
+        $user_instance->failure('Invalid or missing CSRF token', 'Location: users.php');
+    }
 
-if($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["edit"])) {
-    if(
-        isset($_POST["username"]) &&
-        isset($_POST["password"]) &&
-        isset($_POST["type"]) &&
-        isset($_POST["id"])
-    )
-        $user_instance->editUser($_POST);
-}
-
-if($_SERVER["REQUEST_METHOD"] === "POST" && !isset($_POST["edit"])) {
-    if(
-        isset($_POST["username"]) &&
-        isset($_POST["password"]) &&
-        isset($_POST["type"])
-    )
-        $user_instance->addUser($_POST);
+    if(isset($_POST["del_id"])) {
+        $user_instance->deleteUser($_POST["del_id"]);
+    } else if(isset($_POST["edit"])) {
+        if(
+            isset($_POST["username"]) &&
+            isset($_POST["password"]) &&
+            isset($_POST["type"]) &&
+            isset($_POST["id"])
+        )
+            $user_instance->editUser($_POST);
+    } else {
+        if(
+            isset($_POST["username"]) &&
+            isset($_POST["password"]) &&
+            isset($_POST["type"])
+        )
+            $user_instance->addUser($_POST);
+    }
 }
 ?>
 

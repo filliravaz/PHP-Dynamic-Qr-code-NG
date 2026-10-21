@@ -64,7 +64,7 @@
         <input type="hidden" name="id_owner" value="<?php echo (int)$_SESSION["user_id"];?>"/>
     <?php } ?>
 
-
+    <input type="hidden" name="csrf_token" value="<?php echo getCsrfToken(); ?>"/>
     <input type="hidden" name="id" value="<?php echo (int)$dynamic_qrcode['id'];?>"/>
     <input type="hidden" name="edit" value="true"/>
     <input type="hidden" name="old_filename" value="<?php echo htmlspecialchars($dynamic_qrcode['filename'], ENT_QUOTES, 'UTF-8');?>"/>

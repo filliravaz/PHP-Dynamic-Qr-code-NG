@@ -40,6 +40,7 @@
             </div>
         </div>
     </div>
+    <input type="hidden" name="csrf_token" value="<?php echo getCsrfToken(); ?>"/>
     <?php if($edit) { ?>
         <input type="hidden" name="id" value="<?php echo (int)$user['id'];?>"/>
         <input type="hidden" name="edit" value="true"/>

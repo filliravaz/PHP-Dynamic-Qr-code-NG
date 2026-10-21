@@ -3,6 +3,7 @@
         <div id="err-msg"></div>
         <div class="bulk-action-wrapper">
             <form id="bulk-action" action="bulk_action.php" method="POST">
+                <input type="hidden" name="csrf_token" value="<?php echo getCsrfToken(); ?>">
                 <div class="col-sm-12 mb-2" style="margin-left: 10px">
                     <div class="row">
                         <div class="col-5 col-md-2">
@@ -109,6 +110,7 @@
                 </div>
                 <div class="modal-body">
                     <input type="hidden" name="del_id" id="del_id" value="">
+                    <input type="hidden" name="csrf_token" value="<?php echo getCsrfToken(); ?>">
                     <p>Are you sure you want to delete this row? Proceeding with the cancellation it will no longer be possible to recover the unique identifier and you will delete the created QR code from the server</p>
                 </div>
                 <div class="modal-footer">
