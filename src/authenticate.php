@@ -36,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST')
 				$expiry_time = date('Y-m-d H:i:s', strtotime(' + 30 days'));
 				$expires = strtotime($expiry_time);
 
-				$isSecure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
+				$isSecure = isHttpsRequest();
 				$cookieOptions = [
 					'expires' => $expires,
 					'path' => '/',

@@ -68,9 +68,19 @@ class Qrcode {
         if (isset($input_data['size']))
             $size = min(max((int)$input_data['size'], 100), 1000);
 
-        //character # deleted
-        $foreground = substr($input_data['foreground'], 1);
-        $background = substr($input_data['background'], 1);
+        $normalizeColor = function($color, $default) {
+            if (!is_string($color)) {
+                return $default;
+            }
+            $color = ltrim(trim($color), '#');
+            if (preg_match('/^[a-f\d]{6}$/i', $color)) {
+                return strtolower($color);
+            }
+            return $default;
+        };
+
+        $foreground = $normalizeColor($input_data['foreground'] ?? null, '000000');
+        $background = $normalizeColor($input_data['background'] ?? null, 'ffffff');
 
         //$logo = $_POST['optionlogo'];
            

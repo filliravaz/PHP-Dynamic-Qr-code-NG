@@ -11,8 +11,11 @@ if (defined('TYPE') && in_array(strtolower(TYPE), ['dev', 'development', 'debug'
     ini_set('log_errors', '1');
 }
 
+define('BASE_PATH', dirname(dirname(__FILE__)));
+require_once BASE_PATH . '/helpers/helpers.php';
+
 if (session_status() === PHP_SESSION_NONE) {
-    $isSecure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
+    $isSecure = isHttpsRequest();
     ini_set('session.cookie_httponly', '1');
     ini_set('session.use_only_cookies', '1');
     ini_set('session.cookie_samesite', 'Lax');
@@ -21,7 +24,6 @@ if (session_status() === PHP_SESSION_NONE) {
     }
 }
 
-define('BASE_PATH', dirname(dirname(__FILE__)));
 define('CURRENT_PAGE', basename($_SERVER['REQUEST_URI']));
 define('SCRIPT_NAME', ltrim(dirname($_SERVER['SCRIPT_NAME']), '/'));
 
@@ -31,7 +33,6 @@ else
     define('SCRIPT_FOLDER', "/" . SCRIPT_NAME);
 
 require_once BASE_PATH . '/lib/MysqliDb/MysqliDb.php';
-require_once BASE_PATH . '/helpers/helpers.php';
 
 /* SAVED QR CODES */
 //You can change the folder where the qr code will be saved

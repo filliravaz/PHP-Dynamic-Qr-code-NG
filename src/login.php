@@ -1,6 +1,6 @@
 <?php
-session_start();
 require_once 'config/config.php';
+session_start();
 $token = bin2hex(random_bytes(16));
 
 // If User has already logged in, redirect to dashboard page.

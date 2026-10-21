@@ -15,4 +15,6 @@ define('DATABASE_CHARSET', getenv('DATABASE_CHARSET') ?: 'utf8');
 
 define('TYPE', getenv('TYPE') ?: 'local');
 define('BASE_URL', getenv('BASE_URL') ?: 'http://localhost');
+define('FORCE_HTTPS', filter_var(getenv('FORCE_HTTPS'), FILTER_VALIDATE_BOOLEAN));
+define('TRUSTED_PROXIES', getenv('TRUSTED_PROXIES') !== false ? getenv('TRUSTED_PROXIES') : '');
 define('QRCODE_GENERATOR', getenv('QRCODE_GENERATOR') ?: 'internal-chillerlan.qrcode'); // options: internal-chillerlan.qrcode or external-api.qrserver.com

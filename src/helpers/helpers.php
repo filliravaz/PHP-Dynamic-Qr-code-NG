@@ -63,10 +63,75 @@ function validateCsrfToken($token = null) {
 }
 
 /**
+ * Determine whether the current request is over HTTPS.
+ * Derives HTTPS from FORCE_HTTPS or public BASE_URL, direct server detection,
+ * and honors X-Forwarded-Proto only when the request originates from a configured trusted proxy.
+ */
+function isHttpsRequest() {
+	// 1. Force HTTPS configuration
+	if (defined('FORCE_HTTPS') && FORCE_HTTPS) {
+		return true;
+	}
+	$forceHttps = getenv('FORCE_HTTPS');
+	if ($forceHttps !== false && filter_var($forceHttps, FILTER_VALIDATE_BOOLEAN)) {
+		return true;
+	}
+
+	// 2. Derive from public BASE_URL
+	if (defined('BASE_URL') && is_string(BASE_URL) && stripos(BASE_URL, 'https://') === 0) {
+		return true;
+	}
+
+	// 3. Direct server detection
+	if (!empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off') {
+		return true;
+	}
+	if (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443) {
+		return true;
+	}
+
+	// 4. Honor X-Forwarded-Proto only from a configured trusted proxy
+	$trustedProxies = defined('TRUSTED_PROXIES') ? TRUSTED_PROXIES : getenv('TRUSTED_PROXIES');
+	if (!empty($trustedProxies) && is_string($trustedProxies)) {
+		$clientIp = $_SERVER['REMOTE_ADDR'] ?? '';
+		if ($clientIp !== '') {
+			$proxyList = array_map('trim', explode(',', $trustedProxies));
+			$isTrusted = false;
+			foreach ($proxyList as $proxy) {
+				if ($proxy === '*' || $proxy === $clientIp) {
+					$isTrusted = true;
+					break;
+				}
+				if (strpos($proxy, '/') !== false) {
+					[$subnet, $bits] = explode('/', $proxy, 2);
+					if (filter_var($clientIp, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) && filter_var($subnet, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+						$ipLong = ip2long($clientIp);
+						$subnetLong = ip2long($subnet);
+						$mask = -1 << (32 - (int)$bits);
+						if (($ipLong & $mask) === ($subnetLong & $mask)) {
+							$isTrusted = true;
+							break;
+						}
+					}
+				}
+			}
+			if ($isTrusted && !empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+				$forwardedProto = strtolower(trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'])[0]));
+				if ($forwardedProto === 'https') {
+					return true;
+				}
+			}
+		}
+	}
+
+	return false;
+}
+
+/**
  * Clear Auth Cookie
  */
 function clearAuthCookie() {
-	$isSecure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
+	$isSecure = isHttpsRequest();
 	$clearOptions = [
 		'expires' => time() - 3600,
 		'path' => '/',
@@ -160,9 +225,9 @@ function base_url() {
     } else {
         return sprintf(
             "%s://%s:%s",
-            isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http',
-            $_SERVER['SERVER_NAME'],
-            $_SERVER['SERVER_PORT']
+            isHttpsRequest() ? 'https' : 'http',
+            $_SERVER['SERVER_NAME'] ?? 'localhost',
+            $_SERVER['SERVER_PORT'] ?? '80'
         );
     }
 }
