@@ -40,36 +40,58 @@ if ($versionRes && $versionRes->num_rows > 0) {
     exit;
 }
 
-// 3. If accessed via browser, require a POST confirmation
-if (!$isCli && $_SERVER['REQUEST_METHOD'] !== 'POST') {
-    ?>
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <title>Database Upgrade</title>
-        <style>
-            body { font-family: sans-serif; margin: 40px; line-height: 1.6; }
-            .btn { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
-            .alert { background: #fff3cd; color: #856404; padding: 15px; border-radius: 4px; margin-bottom: 20px; }
-            .info { background: #d1ecf1; color: #0c5460; padding: 15px; border-radius: 4px; margin-bottom: 20px; }
-        </style>
-    </head>
-    <body>
-        <h2>PHP-Dynamic-Qr-code-NG Database Upgrade</h2>
-        <div class="info">
-            Target schema version: <strong><?php echo htmlspecialchars(TARGET_VERSION); ?></strong>
-        </div>
-        <div class="alert">
-            <strong>Automatic Snapshot:</strong> Before applying changes, backup snapshot tables with suffix <code>_backup_v1</code> will be created automatically in your database.
-        </div>
-        <form method="POST">
-            <button type="submit" name="confirm_upgrade" value="1" class="btn">Proceed with Upgrade to v<?php echo htmlspecialchars(TARGET_VERSION); ?></button>
-        </form>
-    </body>
-    </html>
-    <?php
-    $conn->close();
-    exit;
+// 3. If accessed via browser, verify superadmin authentication and require CSRF-protected POST
+if (!$isCli) {
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    require_once dirname(__DIR__) . '/helpers/helpers.php';
+
+    if (empty($_SESSION['user_logged_in']) || empty($_SESSION['type']) || $_SESSION['type'] !== 'super') {
+        http_response_code(403);
+        outputMessage("Forbidden: Database upgrades via browser require an authenticated super administrator session. <a href='../login.php'>Log In</a>", false);
+        $conn->close();
+        exit;
+    }
+
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        ?>
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <title>Database Upgrade</title>
+            <style>
+                body { font-family: sans-serif; margin: 40px; line-height: 1.6; }
+                .btn { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+                .alert { background: #fff3cd; color: #856404; padding: 15px; border-radius: 4px; margin-bottom: 20px; }
+                .info { background: #d1ecf1; color: #0c5460; padding: 15px; border-radius: 4px; margin-bottom: 20px; }
+            </style>
+        </head>
+        <body>
+            <h2>PHP-Dynamic-Qr-code-NG Database Upgrade</h2>
+            <div class="info">
+                Target schema version: <strong><?php echo htmlspecialchars(TARGET_VERSION); ?></strong>
+            </div>
+            <div class="alert">
+                <strong>Automatic Snapshot:</strong> Before applying changes, backup snapshot tables with suffix <code>_backup_v1</code> will be created automatically in your database.
+            </div>
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(getCsrfToken(), ENT_QUOTES, 'UTF-8'); ?>">
+                <button type="submit" name="confirm_upgrade" value="1" class="btn">Proceed with Upgrade to v<?php echo htmlspecialchars(TARGET_VERSION); ?></button>
+            </form>
+        </body>
+        </html>
+        <?php
+        $conn->close();
+        exit;
+    }
+
+    if (!validateCsrfToken()) {
+        http_response_code(403);
+        outputMessage("Forbidden: Invalid or missing CSRF token.", false);
+        $conn->close();
+        exit;
+    }
 }
 
 outputMessage("<strong>Starting database upgrade to version " . TARGET_VERSION . "...</strong>", $isCli);
