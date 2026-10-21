@@ -1,14 +1,15 @@
+# Fork notice
+This repository contains a fork of the origianl project [giandonatoinverso/php-dynamic-qrcode](https://github.com/giandonatoinverso/php-dynamic-qrcode), which was archived in September 2025. It aims to improve security and functionality. We aim to be backwards compatible, making the new software a drop-in replacement.
+
+---
+
 **PHP Dynamic Qr code** is a script that allows the generation and saving of dynamic and static QR codes. It has a clean, responsive, and user-friendly design. It is based on [AdminLte](https://adminlte.io/), the "Best open source admin dashboard & control panel theme. Built on top of Bootstrap" and [Core PHP Admin Panel](https://github.com/chetans9/core-php-admin-panel), a simple Admin Panel written in core PHP that contains an implementation of general features you might need in your website admin panel like: record management (CRUD), secure authentication, pagination, filters.
 
-This version is a fork of [PHP Dynamic Qr Code](https://github.com/giandonatoinverso/php-dynamic-qrcode), created to resolve critical security issues and to improve functionality, while remaining backwards compatible.
 
-[LIVE DEMO CURRENTLY NOT AVAILABLE]()
 
-~~username: admin~~
+LIVE DEMO CURRENTLY NOT AVAILABLE - Will be added once this fork reaches a "stable" state.
 
-~~password: admin~~
-
-~~[DOCUMENTATION](https://giandonatoinverso.it/qrcode/documentation)~~ Not updated, will be updated in the future.
+~~DOCUMENTATION~~ Not yet updated. Will be added in the future.
 
 # Features
 
@@ -51,7 +52,7 @@ This version is a fork of [PHP Dynamic Qr Code](https://github.com/giandonatoinv
 ## What is included
 
 - PHP files
-~~- .sql file with sample data~~ Removed in order to use a standard MySQL image (for now)
+~~- .sql file with sample data~~ Removed in order to use a standard MySQL image.
 - JS files
 - CSS files
 - Docker compose file
