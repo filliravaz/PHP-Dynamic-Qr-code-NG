@@ -9,12 +9,16 @@ CREATE TABLE IF NOT EXISTS `users` (
   `remember_token` varchar(255) DEFAULT NULL,
   `expires` datetime DEFAULT NULL,
   `type` varchar(10) NOT NULL,
+  `must_change_password` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   UNIQUE KEY `username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-INSERT INTO `users` (`id`, `username`, `password`, `series_id`, `remember_token`, `expires`, `type`) VALUES
-(1, 'superadmin', '$2y$10$xpZc5KC.aU2XHkcqhuZGFuAnqmtL4Unt8MysOyylceq.19XIyoZpG', NULL, NULL, NULL, 'super')
+-- Initial default superadmin account:
+-- Initial password is set to 'superadmin', but marked with must_change_password = 1.
+-- The user is forced to change the password immediately upon first login before access is granted.
+INSERT INTO `users` (`id`, `username`, `password`, `series_id`, `remember_token`, `expires`, `type`, `must_change_password`) VALUES
+(1, 'superadmin', '$2y$10$xpZc5KC.aU2XHkcqhuZGFuAnqmtL4Unt8MysOyylceq.19XIyoZpG', NULL, NULL, NULL, 'super', 1)
 ON DUPLICATE KEY UPDATE `id` = `id`;
 
 CREATE TABLE IF NOT EXISTS `dynamic_qrcodes` (

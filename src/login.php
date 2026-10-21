@@ -38,6 +38,13 @@ if (isset($_COOKIE['series_id']) && isset($_COOKIE['remember_token']))
 			$_SESSION['user_logged_in'] = TRUE;
             $_SESSION['user_id'] = (int)$row['id'];
 			$_SESSION['type'] = $row['type'];
+
+			if (!empty($row['must_change_password'])) {
+				$_SESSION['must_change_password'] = true;
+				header('Location: change_password.php');
+				exit;
+			}
+
 			header('Location: index.php');
 			exit;
 		}

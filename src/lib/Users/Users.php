@@ -57,6 +57,7 @@ class Users
         $data_to_db["username"] = $input_data["username"];
         $data_to_db['password'] = password_hash($input_data['password'], PASSWORD_DEFAULT);
         $data_to_db["type"] = $input_data["type"];
+        $data_to_db["must_change_password"] = 0;
 
         $db->where('username', $data_to_db['username']);
         $db->get('users');
@@ -92,6 +93,7 @@ class Users
         $data_to_db["username"] = $input_data["username"];
         $data_to_db['password'] = password_hash($input_data['password'], PASSWORD_DEFAULT);
         $data_to_db["type"] = $input_data["type"];
+        $data_to_db["must_change_password"] = 0;
 
 	    $db->where('id', $input_data["id"]);
 	    $stat = $db->update('users', $data_to_db);

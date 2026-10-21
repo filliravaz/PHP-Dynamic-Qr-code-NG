@@ -1,5 +1,5 @@
 # Fork notice
-This repository contains a fork of the origianl project [giandonatoinverso/php-dynamic-qrcode](https://github.com/giandonatoinverso/php-dynamic-qrcode), which was archived in September 2025. It aims to improve security and functionality. We aim to be backwards compatible, making the new software a drop-in replacement.
+This repository contains a fork of the original project [giandonatoinverso/php-dynamic-qrcode](https://github.com/giandonatoinverso/php-dynamic-qrcode), which was archived in September 2025. It aims to improve security and functionality. We aim to be backwards compatible, making the new software a drop-in replacement.
 
 ---
 
@@ -52,7 +52,7 @@ LIVE DEMO CURRENTLY NOT AVAILABLE - Will be added once this fork reaches a "stab
 ## What is included
 
 - PHP files
-~~- .sql file with sample data~~ Removed in order to use a standard MySQL image.
+~~- .sql file with sample data~~ Removed in order to use the official MariaDB image used by docker-compose.yml.
 - JS files
 - CSS files
 - Docker compose file
@@ -63,4 +63,4 @@ LIVE DEMO CURRENTLY NOT AVAILABLE - Will be added once this fork reaches a "stab
 ```bash
 docker compose build --no-cache && docker compose up -d
 ```
-3. Open your browser at http://localhost:80 and login with (username: superadmin, password: superadmin)
+3. Open your browser at http://localhost:80 and log in with the initial superadmin credential (username: `superadmin`, password: `superadmin`). You will be required to immediately change your password upon first login before accessing the application.

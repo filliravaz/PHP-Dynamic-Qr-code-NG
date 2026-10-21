@@ -47,11 +47,17 @@ if (!$isCli) {
     }
     require_once dirname(__DIR__) . '/helpers/helpers.php';
 
+    /**
+     * Legacy installation note:
+     * Installations running an older database schema where the user table is still named `admin_accounts`
+     * (with `user_name` / `admin_type` columns) cannot authenticate via the 2.0 web login flow and must
+     * execute the upgrade via the CLI (`php src/upgrade/upgrade.php` or `docker compose exec php-dynamic-qrcode php src/upgrade/upgrade.php`).
+     */
     if (empty($_SESSION['user_logged_in']) || empty($_SESSION['type']) || $_SESSION['type'] !== 'super') {
         http_response_code(403);
-        outputMessage("Forbidden: Database upgrades via browser require an authenticated super administrator session. <a href='../login.php'>Log In</a>", false);
+        outputMessage("Forbidden: Database upgrades via browser require an authenticated super administrator session. <a href='../login.php'>Log In</a><br><br><em>Note: If upgrading a legacy installation still using <code>admin_accounts</code>, please run the upgrade via CLI (<code>php src/upgrade/upgrade.php</code>).</em>", false);
         $conn->close();
-        exit;
+        exit(1);
     }
 
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -123,7 +129,7 @@ if (!$isCli) {
         http_response_code(403);
         outputMessage("Forbidden: Invalid or missing CSRF token.", false);
         $conn->close();
-        exit;
+        exit(1);
     }
 }
 
@@ -156,11 +162,20 @@ foreach ($backupTables as $alias => $tName) {
         $bCheck = $conn->query("SHOW TABLES LIKE '{$backupName}'");
         if (!$bCheck || $bCheck->num_rows === 0) {
             if ($conn->query("CREATE TABLE `{$backupName}` LIKE `{$tName}`") === TRUE) {
-                $conn->query("INSERT INTO `{$backupName}` SELECT * FROM `{$tName}`");
-                outputMessage("Snapshot backup created: <code>{$backupName}</code>", $isCli);
+                if ($conn->query("INSERT INTO `{$backupName}` SELECT * FROM `{$tName}`") === TRUE) {
+                    outputMessage("Snapshot backup created: <code>{$backupName}</code>", $isCli);
+                } else {
+                    outputMessage("Error: Failed to copy rows into snapshot table `{$backupName}`: " . htmlspecialchars($conn->error), $isCli);
+                    $conn->close();
+                    exit(1);
+                }
             } else {
-                outputMessage("Warning: Failed to create snapshot table `{$backupName}`: " . htmlspecialchars($conn->error), $isCli);
+                outputMessage("Error: Failed to create snapshot table `{$backupName}`: " . htmlspecialchars($conn->error), $isCli);
+                $conn->close();
+                exit(1);
             }
+        } else {
+            outputMessage("Notice: Snapshot backup `{$backupName}` already exists; preserving existing snapshot.", $isCli);
         }
     }
 }
@@ -201,6 +216,17 @@ if ($typeCheck && $typeCheck->num_rows > 0) {
         outputMessage("The admin_type column was renamed to type successfully.", $isCli);
     } else {
         outputMessage("Error renaming column: " . htmlspecialchars($conn->error), $isCli);
+    }
+}
+
+// Add must_change_password column to users if not present
+$mcpCheck = $conn->query("SHOW COLUMNS FROM " . DATABASE_PREFIX . "users LIKE 'must_change_password'");
+if ($mcpCheck && $mcpCheck->num_rows === 0) {
+    $sql = "ALTER TABLE " . DATABASE_PREFIX . "users ADD `must_change_password` TINYINT(1) NOT NULL DEFAULT 0 AFTER `type`";
+    if ($conn->query($sql) === TRUE) {
+        outputMessage("The must_change_password column has been added to users successfully.", $isCli);
+    } else {
+        outputMessage("Error adding column: " . htmlspecialchars($conn->error), $isCli);
     }
 }
 
@@ -278,8 +304,9 @@ if ($legacyRows && $legacyRows->num_rows > 0) {
     while ($r = $legacyRows->fetch_assoc()) {
         $decoded = htmlspecialchars_decode($r['content'], ENT_QUOTES);
         $upStmt->bind_param('si', $decoded, $r['id']);
-        $upStmt->execute();
-        $migrated++;
+        if ($upStmt->execute()) {
+            $migrated++;
+        }
     }
     outputMessage("Migrated {$migrated} legacy static QR code content records to standard format.", $isCli);
 }

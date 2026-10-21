@@ -5,6 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    pull_policy: build
     restart: "unless-stopped"
     environment:
       TYPE: "docker"
@@ -27,6 +28,23 @@ services:
       - php-dynamic-qrcode-network
 
   php-dynamic-qrcode-db:
+    # -------------------------------------------------------------------------
+    # Database Migration Notice (MySQL 8 to MariaDB 11.4 LTS):
+    # Do NOT directly reuse an existing MySQL 8 data volume (php_dynamic_qrcode_db_data)
+    # with MariaDB 11.4 due to incompatible InnoDB table structures and redo log formats.
+    #
+    # Recommended Migration Path:
+    # 1. Logical Export from existing MySQL 8 container:
+    #    docker exec <mysql8_container> mysqldump -u root -p --all-databases --routines --triggers > dump.sql
+    # 2. Test Import on a temporary test volume:
+    #    docker run --name test-mariadb -v test_mariadb_data:/var/lib/mysql -e MARIADB_ROOT_PASSWORD=changeme -d mariadb:11.4
+    #    docker exec -i test-mariadb mariadb -u root -pchangeme < dump.sql
+    # 3. Validation: Verify MariaDB startup logs and test data access:
+    #    docker logs test-mariadb
+    #    docker exec -it test-mariadb mariadb -u root -pchangeme -e "SHOW DATABASES; SELECT COUNT(*) FROM qrcode.users;"
+    # 4. Production Switch: Stop the MySQL container, initialize a fresh volume for MariaDB,
+    #    import dump.sql into the production MariaDB container, and clean up temporary test resources.
+    # -------------------------------------------------------------------------
     image: "mariadb:11.4"
     restart: "unless-stopped"
     volumes:

@@ -58,6 +58,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST')
 				);
 				$db->update('users', $update_remember);
 			}
+
+			if (!empty($row['must_change_password'])) {
+				$_SESSION['must_change_password'] = true;
+				header('Location: change_password.php');
+				exit;
+			}
+
 			// Authentication successful redirect user
 			header('Location: index.php');
 		}
