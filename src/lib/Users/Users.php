@@ -57,7 +57,8 @@ class Users
         $data_to_db["username"] = $input_data["username"];
         $data_to_db['password'] = password_hash($input_data['password'], PASSWORD_DEFAULT);
         $data_to_db["type"] = $input_data["type"];
-        $data_to_db["must_change_password"] = 0;
+        // Force newly created users to change their initial password on first login
+        $data_to_db["must_change_password"] = 1;
 
         $db->where('username', $data_to_db['username']);
         $db->get('users');
@@ -90,10 +91,27 @@ class Users
             $this->failure('Username already exists', 'Location: user.php?'.$query_string);
         }
 
+        $db->where('id', $input_data["id"]);
+        $currentUser = $db->getOne('users');
+
         $data_to_db["username"] = $input_data["username"];
-        $data_to_db['password'] = password_hash($input_data['password'], PASSWORD_DEFAULT);
         $data_to_db["type"] = $input_data["type"];
-        $data_to_db["must_change_password"] = 0;
+
+        if (!empty($input_data['password'])) {
+            $isSamePassword = (!empty($currentUser['password']) && password_verify($input_data['password'], $currentUser['password']));
+            if (!$isSamePassword) {
+                $data_to_db['password'] = password_hash($input_data['password'], PASSWORD_DEFAULT);
+                // When an administrator changes another user's password, force password change on next login
+                if (isset($_SESSION['user_id']) && (int)$_SESSION['user_id'] !== (int)$input_data['id']) {
+                    $data_to_db["must_change_password"] = 1;
+                } else {
+                    $data_to_db["must_change_password"] = 0;
+                }
+            } else {
+                // Password unchanged: preserve existing flag
+                $data_to_db["must_change_password"] = (int)($currentUser['must_change_password'] ?? 0);
+            }
+        }
 
 	    $db->where('id', $input_data["id"]);
 	    $stat = $db->update('users', $data_to_db);

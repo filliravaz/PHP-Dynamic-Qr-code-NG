@@ -2,6 +2,7 @@ version: "3.2"
 services:
   php-dynamic-qrcode:
     image: "giandonatoinverso/php-dynamic-qr-code:latest"
+    # Note: Requires a full repository checkout to ensure Dockerfile and database/init.sql are present locally
     build:
       context: .
       dockerfile: Dockerfile
@@ -34,16 +35,23 @@ services:
     # with MariaDB 11.4 due to incompatible InnoDB table structures and redo log formats.
     #
     # Recommended Migration Path:
-    # 1. Logical Export from existing MySQL 8 container:
-    #    docker exec <mysql8_container> mysqldump -u root -p --all-databases --routines --triggers > dump.sql
+    # 1. Logical Export of application database from existing MySQL 8 container:
+    #    Create a temporary client option file inside the container (e.g. /tmp/my.cnf, chmod 600):
+    #      [client]
+    #      user=root
+    #      password=your_root_password
+    #    Export only the application database (avoiding system tables from --all-databases):
+    #      docker exec <mysql8_container> mysqldump --defaults-extra-file=/tmp/my.cnf qrcode --routines --triggers > qrcode_dump.sql
+    #    Remove /tmp/my.cnf after export. User credentials and grants should be managed
+    #    separately via standard MariaDB CREATE USER and GRANT syntax or Compose environment variables.
     # 2. Test Import on a temporary test volume:
     #    docker run --name test-mariadb -v test_mariadb_data:/var/lib/mysql -e MARIADB_ROOT_PASSWORD=changeme -d mariadb:11.4
-    #    docker exec -i test-mariadb mariadb -u root -pchangeme < dump.sql
+    #    docker exec -i test-mariadb mariadb --defaults-extra-file=/tmp/my.cnf qrcode < qrcode_dump.sql
     # 3. Validation: Verify MariaDB startup logs and test data access:
     #    docker logs test-mariadb
-    #    docker exec -it test-mariadb mariadb -u root -pchangeme -e "SHOW DATABASES; SELECT COUNT(*) FROM qrcode.users;"
+    #    docker exec -it test-mariadb mariadb --defaults-extra-file=/tmp/my.cnf -e "SHOW TABLES IN qrcode; SELECT COUNT(*) FROM qrcode.users;"
     # 4. Production Switch: Stop the MySQL container, initialize a fresh volume for MariaDB,
-    #    import dump.sql into the production MariaDB container, and clean up temporary test resources.
+    #    import qrcode_dump.sql into the production MariaDB container, and clean up temporary test resources.
     # -------------------------------------------------------------------------
     image: "mariadb:11.4"
     restart: "unless-stopped"
@@ -66,4 +74,3 @@ volumes:
 
 networks:
   php-dynamic-qrcode-network:
-    driver: bridge

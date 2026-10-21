@@ -58,7 +58,7 @@ LIVE DEMO CURRENTLY NOT AVAILABLE - Will be added once this fork reaches a "stab
 - Docker compose file
 
 ## Setup with docker compose
-1. download docker-compose.yml file
+1. Clone or checkout the repository (ensuring `Dockerfile` and `database/init.sql` are present locally alongside `docker-compose.yml`)
 2. Start docker stack
 ```bash
 docker compose build --no-cache && docker compose up -d

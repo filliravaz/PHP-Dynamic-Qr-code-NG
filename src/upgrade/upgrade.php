@@ -275,6 +275,11 @@ foreach ($qrTables as $tableKey => $tableName) {
     // 2. Explicit operator assignment for remaining ownerless records
     if ($operatorId !== null) {
         $assignStmt = $conn->prepare("UPDATE `{$tableName}` SET `id_owner` = ? WHERE `id_owner` IS NULL OR `id_owner` = 0");
+        if (!$assignStmt) {
+            outputMessage("Error preparing operator assignment query for {$tableKey}: " . htmlspecialchars($conn->error), $isCli);
+            $conn->close();
+            exit(1);
+        }
         $assignStmt->bind_param('i', $operatorId);
         if ($assignStmt->execute()) {
             $assigned = $conn->affected_rows;
@@ -282,6 +287,7 @@ foreach ($qrTables as $tableKey => $tableName) {
                 outputMessage("Assigned {$assigned} unowned records in {$tableKey} to operator ID {$operatorId}.", $isCli);
             }
         }
+        $assignStmt->close();
     }
 
     // 3. Document any remaining ownerless records
@@ -300,6 +306,11 @@ $staticTable = DATABASE_PREFIX . 'static_qrcodes';
 $legacyRows = $conn->query("SELECT `id`, `content` FROM `{$staticTable}` WHERE `content` LIKE '%&lt;strong&gt;%' OR `content` LIKE '%&lt;div%' OR `content` LIKE '%&lt;b&gt;%'");
 if ($legacyRows && $legacyRows->num_rows > 0) {
     $upStmt = $conn->prepare("UPDATE `{$staticTable}` SET `content` = ? WHERE `id` = ?");
+    if (!$upStmt) {
+        outputMessage("Error preparing static QR content normalization query: " . htmlspecialchars($conn->error), $isCli);
+        $conn->close();
+        exit(1);
+    }
     $migrated = 0;
     while ($r = $legacyRows->fetch_assoc()) {
         $decoded = htmlspecialchars_decode($r['content'], ENT_QUOTES);
@@ -308,13 +319,17 @@ if ($legacyRows && $legacyRows->num_rows > 0) {
             $migrated++;
         }
     }
+    $upStmt->close();
     outputMessage("Migrated {$migrated} legacy static QR code content records to standard format.", $isCli);
 }
 
 // 6. Record successful upgrade in schema_version table
 $insertStmt = $conn->prepare("INSERT INTO `{$versionTable}` (`version`, `applied_at`) VALUES (?, NOW()) ON DUPLICATE KEY UPDATE `applied_at` = NOW()");
-$insertStmt->bind_param('s', $targetVer);
-$insertStmt->execute();
+if ($insertStmt) {
+    $insertStmt->bind_param('s', $targetVer);
+    $insertStmt->execute();
+    $insertStmt->close();
+}
 
 outputMessage("<strong>Upgrade completed successfully! Database is now at schema version " . TARGET_VERSION . ".</strong>", $isCli);
 
