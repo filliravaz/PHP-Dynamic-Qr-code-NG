@@ -3,6 +3,7 @@ name: Build and Publish Docker Image
 on:
   push:
     branches:
+      - main
       - master
     tags:
       - 'v*'
@@ -25,6 +26,22 @@ jobs:
         run: |
           echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
 
+      - name: Compute version metadata
+        id: version_meta
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            REF_NAME="${{ github.ref_name }}"
+            CLEAN_VERSION="${REF_NAME#v}"
+            echo "channel=LTS" >> "$GITHUB_OUTPUT"
+            echo "version=$CLEAN_VERSION" >> "$GITHUB_OUTPUT"
+            echo "commit=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+          else
+            echo "channel=Nightly" >> "$GITHUB_OUTPUT"
+            echo "version=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+            echo "commit=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -43,8 +60,10 @@ jobs:
           flavor: |
             latest=false
           tags: |
-            # When pushed to main: tag only as nightly
-            type=raw,value=nightly,enable=${{ github.ref == 'refs/heads/main' }}
+            # When pushed to main / master: tag as nightly and commit ID
+            type=raw,value=nightly,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
+            type=sha,format=short,prefix=,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
+            type=sha,format=short,prefix=nightly-,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' }}
             # When a version tag is pushed (e.g. v1.2.3 or v2.3):
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -60,5 +79,9 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APP_CHANNEL=${{ steps.version_meta.outputs.channel }}
+            APP_VERSION=${{ steps.version_meta.outputs.version }}
+            APP_COMMIT=${{ steps.version_meta.outputs.commit }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

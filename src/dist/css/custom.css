@@ -1,9 +1,27 @@
-
-
 .bulk-action-wrapper {
     padding: 10px 0;
 }
 #err-msg {
     display: none;
     color: red;
+}
+
+/* Align footer block on login / change-password pages */
+.login-page .main-footer {
+    margin-left: 0 !important;
+    margin-top: 1.5rem;
+    width: 440px;
+    max-width: 90%;
+    text-align: center;
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+    background-color: #fff;
+    box-shadow: 0 0 1px rgba(0, 0, 0, .125), 0 1px 3px rgba(0, 0, 0, .2);
+    padding: 0.75rem 1rem;
+}
+
+.login-page .main-footer .float-right {
+    float: none !important;
+    display: block !important;
+    margin-top: 0.25rem;
 }
