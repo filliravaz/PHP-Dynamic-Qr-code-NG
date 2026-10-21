@@ -48,6 +48,7 @@ if (isset($_GET['zip'])) {
     header('Content-Length: ' . filesize($realZipPath));
     header('Pragma: no-cache');
     header('Expires: 0');
+    header('Cache-Control: no-store, private');
 
     // Clean output buffer before streaming
     while (ob_get_level()) {
@@ -116,7 +117,7 @@ if ($ext === 'svg') {
 }
 header('Content-Disposition: ' . $disposition . '; filename="' . $safeFilename . '"');
 header('Content-Length: ' . filesize($realFilePath));
-header('Cache-Control: private, max-age=3600');
+header('Cache-Control: no-store, private');
 
 while (ob_get_level()) {
     ob_end_clean();

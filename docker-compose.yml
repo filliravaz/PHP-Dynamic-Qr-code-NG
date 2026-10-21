@@ -9,8 +9,8 @@ services:
       BASE_URL: "https://mydomain.com"
       DATABASE_HOST: "php-dynamic-qrcode-db"
       DATABASE_PORT: "3306"
-      DATABASE_NAME: "qrcode"
-      DATABASE_USER: "qrcode"
+      DATABASE_NAME: "${MYSQL_DATABASE:-qrcode}"
+      DATABASE_USER: "${MYSQL_USER:-qrcode}"
       DATABASE_PASSWORD: "${MYSQL_PASSWORD:-changeme}"
       DATABASE_PREFIX: ""
       DATABASE_CHARSET: "utf8"
@@ -31,11 +31,15 @@ services:
     #
     # Recommended Migration Path for Existing Deployments:
     # 1. Logical Export of application database from existing MySQL 8 container:
-    #    a. Create temporary client option file inside the MySQL 8 container:
+    #    a. Stop the old application container or make it read-only before the final export,
+    #       and keep writes blocked through cutover so no QR-code changes occur after the dump begins
+    #       (do not rely on --single-transaction alone to capture later writes):
+    #       docker stop <old_php_container>
+    #    b. Create temporary client option file inside the MySQL 8 container:
     #       docker exec <mysql8_container> sh -c "printf '[client]\nuser=root\npassword=your_root_password\n' > /tmp/my.cnf && chmod 600 /tmp/my.cnf"
-    #    b. Export application database (avoiding system tables from --all-databases):
+    #    c. Export application database (avoiding system tables from --all-databases):
     #       docker exec <mysql8_container> mysqldump --defaults-extra-file=/tmp/my.cnf qrcode --routines --triggers > qrcode_dump.sql
-    #    c. Clean up option file:
+    #    d. Clean up option file:
     #       docker exec <mysql8_container> rm -f /tmp/my.cnf
     #
     # 2. Test Import and Validation on a temporary test volume:
@@ -57,8 +61,9 @@ services:
     #       # - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     #    b. Start the Compose-managed database service:
     #       docker compose up -d php-dynamic-qrcode-db
-    #    c. Create a protected client option file in the database container:
-    #       docker compose exec php-dynamic-qrcode-db sh -c "printf '[client]\nuser=root\npassword=changeme\n' > /tmp/my.cnf && chmod 600 /tmp/my.cnf"
+    #    c. Create a protected client option file in the database container using the configured
+    #       MYSQL_ROOT_PASSWORD without exposing it as a command-line argument:
+    #       docker compose exec php-dynamic-qrcode-db sh -c 'printf "[client]\nuser=root\npassword=%s\n" "$MYSQL_ROOT_PASSWORD" > /tmp/my.cnf && chmod 600 /tmp/my.cnf'
     #    d. Import the legacy dump into MariaDB:
     #       docker compose exec -T php-dynamic-qrcode-db mariadb --defaults-extra-file=/tmp/my.cnf qrcode < qrcode_dump.sql
     #    e. Remove the temporary credentials file:

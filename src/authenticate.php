@@ -17,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST')
 	$password = (string)($_POST['password'] ?? '');
 	$remember = filter_input(INPUT_POST, 'remember');
 
-	$clientIp = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+	$clientIp = getClientIp();
 
 	// Check rate limit: maximum 5 attempts per 15 minutes (SEC-07)
 	if (!checkLoginRateLimit($username, $clientIp, 5, 15)) {

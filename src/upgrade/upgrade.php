@@ -188,14 +188,34 @@ foreach ($backupTables as $alias => $tName) {
         $backupName = $tName . '_backup_v1';
         $bCheck = $conn->query("SHOW TABLES LIKE '{$backupName}'");
         if (!$bCheck || $bCheck->num_rows === 0) {
-            if ($conn->query("CREATE TABLE `{$backupName}` LIKE `{$tName}`") === TRUE) {
-                if ($conn->query("INSERT INTO `{$backupName}` SELECT * FROM `{$tName}`") === TRUE) {
-                    outputMessage("Snapshot backup created: <code>{$backupName}</code>", $isCli);
+            $createdTable = false;
+            try {
+                if ($conn->query("CREATE TABLE `{$backupName}` LIKE `{$tName}`") === TRUE) {
+                    $createdTable = true;
+                    if ($conn->query("INSERT INTO `{$backupName}` SELECT * FROM `{$tName}`") === TRUE) {
+                        outputMessage("Snapshot backup created: <code>{$backupName}</code>", $isCli);
+                    } else {
+                        $copyError = $conn->error;
+                        try {
+                            $conn->query("DROP TABLE IF EXISTS `{$backupName}`");
+                        } catch (\Throwable $dropEx) {
+                            // Preserve original copy error diagnostic without replacing it
+                        }
+                        abortMigration($conn, "Failed to copy rows into snapshot table `{$backupName}`: " . $copyError, $isCli);
+                    }
                 } else {
-                    abortMigration($conn, "Failed to copy rows into snapshot table `{$backupName}`: " . $conn->error, $isCli);
+                    abortMigration($conn, "Failed to create snapshot table `{$backupName}`: " . $conn->error, $isCli);
                 }
-            } else {
-                abortMigration($conn, "Failed to create snapshot table `{$backupName}`: " . $conn->error, $isCli);
+            } catch (\mysqli_sql_exception $e) {
+                $originalError = $e->getMessage();
+                if ($createdTable) {
+                    try {
+                        $conn->query("DROP TABLE IF EXISTS `{$backupName}`");
+                    } catch (\Throwable $dropEx) {
+                        // Preserve original copy error diagnostic without replacing it
+                    }
+                }
+                abortMigration($conn, "Failed during snapshot of `{$backupName}`: " . $originalError, $isCli);
             }
         } else {
             outputMessage("Notice: Snapshot backup `{$backupName}` already exists; preserving existing snapshot.", $isCli);
@@ -309,6 +329,23 @@ if ($statCheck->num_rows === 0) {
     } else {
         abortMigration($conn, "Error adding column id_owner to static_qrcodes: " . $conn->error, $isCli);
     }
+}
+
+// Create login_attempts table if not present (matching database/init.sql)
+$loginAttemptsTable = DATABASE_PREFIX . 'login_attempts';
+$laSql = "CREATE TABLE IF NOT EXISTS `{$loginAttemptsTable}` (
+    `id` INT(11) NOT NULL AUTO_INCREMENT,
+    `ip_address` VARCHAR(45) NOT NULL,
+    `username` VARCHAR(50) NOT NULL,
+    `attempted_at` DATETIME NOT NULL,
+    PRIMARY KEY (`id`),
+    KEY `idx_ip_time` (`ip_address`, `attempted_at`),
+    KEY `idx_user_time` (`username`, `attempted_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+if ($conn->query($laSql) === TRUE) {
+    outputMessage("The login_attempts table was verified/created successfully.", $isCli);
+} else {
+    abortMigration($conn, "Error creating login_attempts table: " . $conn->error, $isCli);
 }
 
 // Backfill id_owner for dynamic_qrcodes and static_qrcodes

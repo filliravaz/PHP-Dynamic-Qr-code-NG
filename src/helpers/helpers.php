@@ -63,6 +63,62 @@ function validateCsrfToken($token = null) {
 }
 
 /**
+ * Determine whether a given IP address matches configured TRUSTED_PROXIES.
+ */
+function isTrustedProxy($ip) {
+	if (empty($ip) || !is_string($ip)) {
+		return false;
+	}
+	$trustedProxies = defined('TRUSTED_PROXIES') ? TRUSTED_PROXIES : getenv('TRUSTED_PROXIES');
+	if (empty($trustedProxies) || !is_string($trustedProxies)) {
+		return false;
+	}
+	$proxyList = array_map('trim', explode(',', $trustedProxies));
+	foreach ($proxyList as $proxy) {
+		if ($proxy === '*' || $proxy === $ip) {
+			return true;
+		}
+		if (strpos($proxy, '/') !== false) {
+			[$subnet, $bits] = explode('/', $proxy, 2);
+			if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) && filter_var($subnet, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+				$ipLong = ip2long($ip);
+				$subnetLong = ip2long($subnet);
+				$mask = -1 << (32 - (int)$bits);
+				if (($ipLong & $mask) === ($subnetLong & $mask)) {
+					return true;
+				}
+			}
+		}
+	}
+	return false;
+}
+
+/**
+ * Retrieve the client IP address.
+ * Trusts X-Forwarded-For only when the direct remote address is trusted,
+ * selecting the first valid non-trusted address while otherwise returning the remote address.
+ */
+function getClientIp() {
+	$remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+	if (!isTrustedProxy($remoteAddr)) {
+		return $remoteAddr;
+	}
+
+	if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+		$forwarded = array_map('trim', explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']));
+		foreach ($forwarded as $ip) {
+			if (filter_var($ip, FILTER_VALIDATE_IP)) {
+				if (!isTrustedProxy($ip)) {
+					return $ip;
+				}
+			}
+		}
+	}
+
+	return $remoteAddr;
+}
+
+/**
  * Determine whether the current request is over HTTPS.
  * Derives HTTPS from FORCE_HTTPS or public BASE_URL, direct server detection,
  * and honors X-Forwarded-Proto only when the request originates from a configured trusted proxy.
@@ -91,36 +147,11 @@ function isHttpsRequest() {
 	}
 
 	// 4. Honor X-Forwarded-Proto only from a configured trusted proxy
-	$trustedProxies = defined('TRUSTED_PROXIES') ? TRUSTED_PROXIES : getenv('TRUSTED_PROXIES');
-	if (!empty($trustedProxies) && is_string($trustedProxies)) {
-		$clientIp = $_SERVER['REMOTE_ADDR'] ?? '';
-		if ($clientIp !== '') {
-			$proxyList = array_map('trim', explode(',', $trustedProxies));
-			$isTrusted = false;
-			foreach ($proxyList as $proxy) {
-				if ($proxy === '*' || $proxy === $clientIp) {
-					$isTrusted = true;
-					break;
-				}
-				if (strpos($proxy, '/') !== false) {
-					[$subnet, $bits] = explode('/', $proxy, 2);
-					if (filter_var($clientIp, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) && filter_var($subnet, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
-						$ipLong = ip2long($clientIp);
-						$subnetLong = ip2long($subnet);
-						$mask = -1 << (32 - (int)$bits);
-						if (($ipLong & $mask) === ($subnetLong & $mask)) {
-							$isTrusted = true;
-							break;
-						}
-					}
-				}
-			}
-			if ($isTrusted && !empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
-				$forwardedProto = strtolower(trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'])[0]));
-				if ($forwardedProto === 'https') {
-					return true;
-				}
-			}
+	$remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '';
+	if ($remoteAddr !== '' && isTrustedProxy($remoteAddr) && !empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+		$forwardedProto = strtolower(trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'])[0]));
+		if ($forwardedProto === 'https') {
+			return true;
 		}
 	}
 
@@ -253,7 +284,7 @@ function checkLoginRateLimit($username, $ip, $maxAttempts = 5, $decayMinutes = 1
             $db->where('attempted_at >= ?', [$cutoff]);
             $ipAttempts = $db->getValue('login_attempts', 'count(*)');
 
-            // If table doesn't exist (e.g. fresh installation before init), lazily create it only on error
+            // If table doesn't exist (e.g. before upgrade migration), lazily create it only on error
             if ($ipAttempts === null && strpos(strtolower((string)$db->getLastError()), "doesn't exist") !== false) {
                 $tableName = DATABASE_PREFIX . 'login_attempts';
                 $db->rawQuery("CREATE TABLE IF NOT EXISTS `{$tableName}` (
@@ -287,25 +318,14 @@ function checkLoginRateLimit($username, $ip, $maxAttempts = 5, $decayMinutes = 1
 
             return true;
         } catch (\Throwable $e) {
-            // Fall through to session fallback
+            error_log('checkLoginRateLimit storage failure: ' . $e->getMessage());
+            // Fail closed whenever persistent storage is unavailable
+            return false;
         }
     }
 
-    // Session fallback if database is unavailable
-    if (session_status() === PHP_SESSION_ACTIVE) {
-        $attempts = $_SESSION['login_rate_attempts'] ?? 0;
-        $start = $_SESSION['login_rate_start'] ?? time();
-        if ((time() - $start) < ($decayMinutes * 60)) {
-            if ($attempts >= $maxAttempts) {
-                return false;
-            }
-        } else {
-            $_SESSION['login_rate_attempts'] = 0;
-            $_SESSION['login_rate_start'] = time();
-        }
-    }
-
-    return true;
+    // Fail closed if database service is unavailable
+    return false;
 }
 
 /**
@@ -327,16 +347,8 @@ function recordLoginAttempt($username, $ip) {
                 $db->where('attempted_at < ?', [$cutoff]);
                 $db->delete('login_attempts');
             }
-            return;
         } catch (\Throwable $e) {
-            // Fall through to session
-        }
-    }
-
-    if (session_status() === PHP_SESSION_ACTIVE) {
-        $_SESSION['login_rate_attempts'] = ($_SESSION['login_rate_attempts'] ?? 0) + 1;
-        if (empty($_SESSION['login_rate_start'])) {
-            $_SESSION['login_rate_start'] = time();
+            error_log('recordLoginAttempt storage failure: ' . $e->getMessage());
         }
     }
 }
@@ -354,12 +366,8 @@ function clearLoginAttempts($username, $ip) {
             }
             $db->delete('login_attempts');
         } catch (\Throwable $e) {
-            // Ignore
+            error_log('clearLoginAttempts storage failure: ' . $e->getMessage());
         }
-    }
-
-    if (session_status() === PHP_SESSION_ACTIVE) {
-        unset($_SESSION['login_rate_attempts'], $_SESSION['login_rate_start']);
     }
 }
 

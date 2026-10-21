@@ -114,7 +114,7 @@ class Qrcode {
 
         if(!file_exists($filename)){
             $queryParams = [
-                'data' => $data_to_qrcode,
+                'data' => urldecode($data_to_qrcode),
                 'size' => $options['size'] . 'x' . $options['size'],
                 'ecc' => $options['errorCorrectionLevel'],
                 'margin' => '0',

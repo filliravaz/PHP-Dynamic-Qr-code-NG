@@ -23,9 +23,17 @@ if (!$authUser || (int)($authUser['session_version'] ?? 1) !== (int)($_SESSION['
 $errors = [];
 $isFirstLogin = !empty($_SESSION['must_change_password']);
 
-$pwAttempts = $_SESSION['pwd_change_attempts'] ?? 0;
-$pwStart = $_SESSION['pwd_change_start'] ?? time();
-$isRateLimited = ((time() - $pwStart) < 900 && $pwAttempts >= 5);
+$pwAttempts = (int)($_SESSION['pwd_change_attempts'] ?? 0);
+$pwStart = (int)($_SESSION['pwd_change_start'] ?? time());
+
+// If the 15-minute window has expired, clear session counters and reinitialize
+if ((time() - $pwStart) >= 900) {
+    unset($_SESSION['pwd_change_attempts'], $_SESSION['pwd_change_start']);
+    $pwAttempts = 0;
+    $pwStart = time();
+}
+
+$isRateLimited = ($pwAttempts >= 5);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($isRateLimited) {
