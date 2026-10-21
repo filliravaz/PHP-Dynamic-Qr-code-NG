@@ -60,7 +60,7 @@ services:
     #    c. Import legacy dump into MariaDB:
     #       docker exec -i php-dynamic-qrcode-migration-db mariadb --defaults-extra-file=/tmp/my.cnf qrcode < qrcode_dump.sql
     #    d. Run database schema upgrade CLI inside the PHP container before starting the application:
-    #       docker compose run --rm php-dynamic-qrcode php src/upgrade/upgrade.php
+    #       docker compose run --rm php-dynamic-qrcode php upgrade/upgrade.php
     #    e. Clean up temporary migration container:
     #       docker rm -f php-dynamic-qrcode-migration-db
     #    f. Start the full application stack (preserving existing init.sql mount below for fresh installations):

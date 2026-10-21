@@ -69,11 +69,11 @@ if (!$isCli) {
      * Legacy installation note:
      * Installations running an older database schema where the user table is still named `admin_accounts`
      * (with `user_name` / `admin_type` columns) cannot authenticate via the 2.0 web login flow and must
-     * execute the upgrade via the CLI (`php src/upgrade/upgrade.php` or `docker compose exec php-dynamic-qrcode php src/upgrade/upgrade.php`).
+     * execute the upgrade via the CLI (`php src/upgrade/upgrade.php` on host, or `docker compose run --rm php-dynamic-qrcode php upgrade/upgrade.php` in Docker).
      */
     if (empty($_SESSION['user_logged_in']) || empty($_SESSION['type']) || $_SESSION['type'] !== 'super') {
         http_response_code(403);
-        outputMessage("Forbidden: Database upgrades via browser require an authenticated super administrator session. <a href='../login.php'>Log In</a><br><br><em>Note: If upgrading a legacy installation still using <code>admin_accounts</code>, please run the upgrade via CLI (<code>php src/upgrade/upgrade.php</code>).</em>", false);
+        outputMessage("Forbidden: Database upgrades via browser require an authenticated super administrator session. <a href='../login.php'>Log In</a><br><br><em>Note: If upgrading a legacy installation still using <code>admin_accounts</code>, please run the upgrade via CLI (<code>php src/upgrade/upgrade.php</code> or in Docker: <code>docker compose run --rm php-dynamic-qrcode php upgrade/upgrade.php</code>).</em>", false);
         $conn->close();
         exit(1);
     }
