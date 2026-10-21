@@ -110,8 +110,12 @@ foreach ($backupTables as $alias => $tName) {
         $backupName = $tName . '_backup_v1';
         $bCheck = $conn->query("SHOW TABLES LIKE '{$backupName}'");
         if (!$bCheck || $bCheck->num_rows === 0) {
-            $conn->query("CREATE TABLE `{$backupName}` AS SELECT * FROM `{$tName}`");
-            outputMessage("Snapshot backup created: <code>{$backupName}</code>", $isCli);
+            if ($conn->query("CREATE TABLE `{$backupName}` LIKE `{$tName}`") === TRUE) {
+                $conn->query("INSERT INTO `{$backupName}` SELECT * FROM `{$tName}`");
+                outputMessage("Snapshot backup created: <code>{$backupName}</code>", $isCli);
+            } else {
+                outputMessage("Warning: Failed to create snapshot table `{$backupName}`: " . htmlspecialchars($conn->error), $isCli);
+            }
         }
     }
 }
