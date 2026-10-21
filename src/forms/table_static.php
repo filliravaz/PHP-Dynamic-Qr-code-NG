@@ -62,7 +62,7 @@
                 <td>
                     <?php
                     // Preserve only structural tags, then normalize all opening tags to attribute-free forms
-                    $clean_content = strip_tags($row['content'], ['strong', 'b', 'br', 'div', 'span', 'p']);
+                    $clean_content = strip_tags((string)($row['content'] ?? ''), ['strong', 'b', 'br', 'div', 'span', 'p']);
                     $clean_content = preg_replace('/<(strong|b|div|span|p)(?:[\s\/][^>]*)?>/i', '<$1>', $clean_content);
                     $clean_content = preg_replace('/<br(?:[\s\/][^>]*)?>/i', '<br>', $clean_content);
                     echo $clean_content;
