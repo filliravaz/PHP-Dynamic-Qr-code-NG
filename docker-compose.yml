@@ -90,7 +90,6 @@ volumes:
   php_dynamic_qrcode_db_data:
     name: php_dynamic_qrcode_db_data
   php_dynamic_qrcode_saved_qrcode_data:
-    name: php_dynamic_qrcode_saved_qrcode_data
 
 networks:
   php-dynamic-qrcode-network:
