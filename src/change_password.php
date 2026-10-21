@@ -35,10 +35,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db->where('id', (int)$_SESSION['user_id']);
             $updated = $db->update('users', [
                 'password' => $newHash,
-                'must_change_password' => 0
+                'must_change_password' => 0,
+                'series_id' => null,
+                'remember_token' => null,
+                'expires' => null
             ]);
 
             if ($updated) {
+                clearAuthCookie();
+                session_regenerate_id(true);
                 unset($_SESSION['must_change_password']);
                 $_SESSION['success'] = 'Password changed successfully! You may now access the application.';
                 header('Location: index.php');

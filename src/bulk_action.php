@@ -10,6 +10,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $json = json_decode(file_get_contents('php://input'), true);
 
     if (!is_array($json) || !isset($json["action"])) {
+        http_response_code(400);
         echo json_encode([
             'data' => 'Invalid request payload.',
             'status' => 400
@@ -19,6 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $csrfToken = $json['csrf_token'] ?? ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
     if (!validateCsrfToken($csrfToken)) {
+        http_response_code(403);
         echo json_encode([
             'data' => 'Invalid or missing CSRF token.',
             'status' => 403
@@ -27,6 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (!isset($json['type']) || !in_array($json['type'], ['dynamic', 'static'], true)) {
+        http_response_code(400);
         echo json_encode([
             'data' => 'Invalid or missing type field in the request.',
             'status' => 400
@@ -38,6 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $params = isset($json['params']) && is_array($json['params']) ? $json['params'] : [];
 
     if (count($params) === 0) {
+        http_response_code(400);
         echo json_encode([
             'data' => 'No qrcodes were selected.',
             'status' => 400
@@ -70,6 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if (count($files) === 0) {
+            http_response_code(400);
             echo json_encode([
                 'data' => 'No downloadable files found.',
                 'status' => 400
@@ -100,6 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
             exit();
         } else {
+            http_response_code(500);
             echo json_encode([
                 'data' => 'Failed to create zip archive.',
                 'status' => 500
@@ -127,6 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
         exit();
     } else {
+        http_response_code(400);
         echo json_encode([
             'data' => 'Action not allowed.',
             'status' => 400
