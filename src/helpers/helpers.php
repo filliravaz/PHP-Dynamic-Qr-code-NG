@@ -50,7 +50,13 @@ function validateCsrfToken($token = null) {
 	if ($token === null) {
 		$token = $_POST['csrf_token'] ?? '';
 	}
-	if (empty($_SESSION['csrf_token']) || empty($token) || !hash_equals($_SESSION['csrf_token'], $token)) {
+	if (
+		empty($_SESSION['csrf_token']) ||
+		!is_string($_SESSION['csrf_token']) ||
+		!is_string($token) ||
+		$token === '' ||
+		!hash_equals($_SESSION['csrf_token'], $token)
+	) {
 		return false;
 	}
 	return true;
