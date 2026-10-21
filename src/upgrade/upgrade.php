@@ -55,6 +55,21 @@ if (!$isCli) {
     }
 
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        $userTableCandidates = [DATABASE_PREFIX . 'users', DATABASE_PREFIX . 'admin_accounts'];
+        $userOpts = null;
+        foreach ($userTableCandidates as $cand) {
+            $candCheck = $conn->query("SHOW TABLES LIKE '{$cand}'");
+            if ($candCheck && $candCheck->num_rows > 0) {
+                $userColCheck = $conn->query("SHOW COLUMNS FROM `{$cand}` LIKE 'username'");
+                $hasUsername = ($userColCheck && $userColCheck->num_rows > 0);
+                $uCol = $hasUsername ? 'username' : 'user_name';
+                $tColCheck = $conn->query("SHOW COLUMNS FROM `{$cand}` LIKE 'type'");
+                $hasType = ($tColCheck && $tColCheck->num_rows > 0);
+                $tCol = $hasType ? 'type' : 'admin_type';
+                $userOpts = $conn->query("SELECT `id`, `{$uCol}` AS username, `{$tCol}` AS `type` FROM `{$cand}` ORDER BY `id` ASC");
+                break;
+            }
+        }
         ?>
         <!DOCTYPE html>
         <html lang="en">
@@ -65,6 +80,8 @@ if (!$isCli) {
                 .btn { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
                 .alert { background: #fff3cd; color: #856404; padding: 15px; border-radius: 4px; margin-bottom: 20px; }
                 .info { background: #d1ecf1; color: #0c5460; padding: 15px; border-radius: 4px; margin-bottom: 20px; }
+                .form-group { margin-bottom: 20px; }
+                select { padding: 8px 12px; border-radius: 4px; border: 1px solid #ccc; font-size: 14px; }
             </style>
         </head>
         <body>
@@ -77,6 +94,22 @@ if (!$isCli) {
             </div>
             <form method="POST">
                 <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(getCsrfToken(), ENT_QUOTES, 'UTF-8'); ?>">
+                
+                <div class="form-group">
+                    <label for="operator_id"><strong>Assign unowned legacy QR codes to:</strong></label><br>
+                    <small>QR codes with verifiable creator records will be restored to their original owners. For any remaining records where no owner can be identified:</small><br>
+                    <select name="operator_id" id="operator_id">
+                        <option value="">-- Preserve NULL (Leave Unassigned) --</option>
+                        <?php if ($userOpts): ?>
+                            <?php while ($u = $userOpts->fetch_assoc()): ?>
+                                <option value="<?php echo (int)$u['id']; ?>" <?php echo ($u['type'] === 'super' ? 'selected' : ''); ?>>
+                                    <?php echo htmlspecialchars($u['username'], ENT_QUOTES, 'UTF-8') . ' (' . htmlspecialchars($u['type'], ENT_QUOTES, 'UTF-8') . ', ID: ' . (int)$u['id'] . ')'; ?>
+                                </option>
+                            <?php endwhile; ?>
+                        <?php endif; ?>
+                    </select>
+                </div>
+
                 <button type="submit" name="confirm_upgrade" value="1" class="btn">Proceed with Upgrade to v<?php echo htmlspecialchars(TARGET_VERSION); ?></button>
             </form>
         </body>
@@ -91,6 +124,18 @@ if (!$isCli) {
         outputMessage("Forbidden: Invalid or missing CSRF token.", false);
         $conn->close();
         exit;
+    }
+}
+
+$operatorId = null;
+if (!$isCli) {
+    if (!empty($_POST['operator_id'])) {
+        $operatorId = filter_var($_POST['operator_id'], FILTER_VALIDATE_INT) ?: null;
+    }
+} else {
+    $cliOp = getenv('DEFAULT_OPERATOR_ID');
+    if ($cliOp !== false && is_numeric($cliOp)) {
+        $operatorId = (int)$cliOp;
     }
 }
 
@@ -178,6 +223,49 @@ if ($statCheck && $statCheck->num_rows === 0) {
         outputMessage("The id_owner column has been added to static_qrcodes successfully.", $isCli);
     } else {
         outputMessage("Error adding column: " . htmlspecialchars($conn->error), $isCli);
+    }
+}
+
+// Backfill id_owner for dynamic_qrcodes and static_qrcodes
+$usersTable = DATABASE_PREFIX . 'users';
+$qrTables = [
+    'dynamic_qrcodes' => DATABASE_PREFIX . 'dynamic_qrcodes',
+    'static_qrcodes'  => DATABASE_PREFIX . 'static_qrcodes'
+];
+
+foreach ($qrTables as $tableKey => $tableName) {
+    // 1. Backfill from created_by author where a matching user exists
+    $backfillSql = "UPDATE `{$tableName}` t
+                    INNER JOIN `{$usersTable}` u ON t.`created_by` = u.`id`
+                    SET t.`id_owner` = t.`created_by`
+                    WHERE (t.`id_owner` IS NULL OR t.`id_owner` = 0) AND t.`created_by` > 0";
+    if ($conn->query($backfillSql) === TRUE) {
+        $recovered = $conn->affected_rows;
+        if ($recovered > 0) {
+            outputMessage("Backfilled {$recovered} records in {$tableKey} from creator ownership data.", $isCli);
+        }
+    }
+
+    // 2. Explicit operator assignment for remaining ownerless records
+    if ($operatorId !== null) {
+        $assignStmt = $conn->prepare("UPDATE `{$tableName}` SET `id_owner` = ? WHERE `id_owner` IS NULL OR `id_owner` = 0");
+        $assignStmt->bind_param('i', $operatorId);
+        if ($assignStmt->execute()) {
+            $assigned = $conn->affected_rows;
+            if ($assigned > 0) {
+                outputMessage("Assigned {$assigned} unowned records in {$tableKey} to operator ID {$operatorId}.", $isCli);
+            }
+        }
+    }
+
+    // 3. Document any remaining ownerless records
+    $unownedCheck = $conn->query("SELECT COUNT(*) AS `cnt` FROM `{$tableName}` WHERE `id_owner` IS NULL OR `id_owner` = 0");
+    if ($unownedCheck) {
+        $cntRow = $unownedCheck->fetch_assoc();
+        $unownedCount = (int)$cntRow['cnt'];
+        if ($unownedCount > 0) {
+            outputMessage("Notice: {$unownedCount} records in {$tableKey} remain unowned (NULL). They can be assigned manually by an administrator.", $isCli);
+        }
     }
 }
 
