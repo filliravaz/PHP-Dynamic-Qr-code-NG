@@ -34,6 +34,8 @@ if($_SERVER["REQUEST_METHOD"] === "POST") {
         )
             $static_qrcode_instance->editQrcode($_POST);
     } else {
+        // CSRF token is validated above for all static QR type submissions
+        // Each form template under src/forms/static/ provides a hidden csrf_token field
         switch($_GET['type'] ?? ''){
             case 'text':         $static_qrcode_instance->textQrcode($_POST['text']);
                 break;
