@@ -395,10 +395,9 @@ class StaticQrcode {
             $data_to_db['id_owner'] = NULL;
         $data_to_db['created_at'] = date('Y-m-d H:i:s');
         $data_to_db['created_by'] = $_SESSION['user_id'];
-        $data_to_db['filename'] = htmlspecialchars($_POST['filename'], ENT_QUOTES, 'UTF-8');
-        $data_to_db['created_at'] = date('Y-m-d H:i:s');
+        $data_to_db['filename'] = $this->qrcode_instance->sanitizeFilename($_POST['filename']);
         $data_to_db['type'] = $type;
-        $data_to_db['format'] = $_POST['format'];
+        $data_to_db['format'] = strtolower(trim($_POST['format'] ?? 'png'));
         $data_to_db['qrcode'] = $data_to_db['filename'].'.'.$data_to_db['format'];
         $data_to_db['content'] = htmlspecialchars($this->sContent, ENT_QUOTES, 'UTF-8');
 
@@ -425,7 +424,7 @@ class StaticQrcode {
             $data_to_db['id_owner'] = $input_data['id_owner'];
         else
             $data_to_db['id_owner'] = NULL;
-        $data_to_db['filename'] = htmlspecialchars($input_data['filename'], ENT_QUOTES, 'UTF-8');
+        $data_to_db['filename'] = $this->qrcode_instance->sanitizeFilename($input_data['filename']);
         $data_to_db['created_at'] = date('Y-m-d H:i:s');
 
         $this->qrcode_instance->editQrcode($input_data, $data_to_db);

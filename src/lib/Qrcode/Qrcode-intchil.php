@@ -43,6 +43,19 @@ class Qrcode {
     {
     }
 
+    public function sanitizeFilename(string $filename): string {
+        $clean = basename(trim($filename));
+        $clean = preg_replace('/[^a-zA-Z0-9_\-\s]/', '', $clean);
+        $clean = preg_replace('/\s+/', ' ', $clean);
+        return trim($clean) !== '' ? trim($clean) : 'qrcode_' . time();
+    }
+
+    public function getSafeFilePath(string $filename, string $ext): string {
+        $safeName = $this->sanitizeFilename($filename);
+        $safeExt = preg_replace('/[^a-zA-Z0-9]/', '', strtolower($ext));
+        return SAVED_QRCODE_DIRECTORY . $safeName . '.' . $safeExt;
+    }
+
     public function getQrcode($id) {
         $db = getDbInstance();
 
@@ -95,50 +108,51 @@ class Qrcode {
         $options = $this->setOptions($input_data);
 
         $outputInterface = QRGdImagePNG::class;
-        $imageFormat = strtolower($data_to_db['format']);
+        $imageFormat = strtolower(trim($data_to_db['format'] ?? 'png'));
         $fileExt = $imageFormat;
         $forceBlackWhite = false;
 
+        switch ($imageFormat)
+        {
+            case 'png':
+                $outputInterface = QRGdImagePNG::class;
+                $imageFormat = 'png';
+                break;
+            case 'gif':
+                $outputInterface = QRImagick::class;
+                $imageFormat = 'gif';
+                break;
+            case 'jpg':
+            case 'jpeg':
+                $outputInterface = QRImagick::class;
+                $imageFormat = 'jpg';
+                $fileExt = 'jpg';
+                break;
+            case 'svg':
+                # $outputInterface = QRImagick::class;
+                $outputInterface = QRMarkupSVG::class;
+                $imageFormat = 'svg';
+                break;
+            case 'svgbw':
+                $outputInterface = QRMarkupSVG::class;
+                $imageFormat = 'svg';
+                $fileExt = 'svg';
+                $forceBlackWhite = true;
+                $data_to_db['format'] = $fileExt;
+                $data_to_db['qrcode'] = str_replace('.svgbw', '.svg', $data_to_db['qrcode']);
+                break;
+            case 'eps':
+                $outputInterface = QREps::class;
+                $imageFormat = 'eps';
+                break;
+            default:
+                $this->failure("Invalid image format requested.");
+        }
 
-         switch ($imageFormat)
-         {
-             case 'png':
-                 $outputInterface = QRGdImagePNG::class;
-                 $imageFormat = 'png';
-                 break;
-             case 'gif':
-                 $outputInterface = QRImagick::class;
-                 $imageFormat = 'gif';
-                 break;
-             case 'jpg':
-                 $outputInterface = QRImagick::class;
-                 $imageFormat = 'jpg';
-                 break;
-             case 'jpeg':
-                 $outputInterface = QRImagick::class;
-                 $imageFormat = 'jpeg';
-                 break;
-             case 'svg':
-                 # $outputInterface = QRImagick::class;
-                 $outputInterface = QRMarkupSVG::class;
-                 $imageFormat = 'svg';
-                 break;
-             case 'svgbw':
-                 $outputInterface = QRMarkupSVG::class;
-                 $imageFormat = 'svg';
-                 $fileExt = 'svg';
-                 $forceBlackWhite = true;
-                 $data_to_db['format'] = $fileExt;
-                 $data_to_db['qrcode'] = str_replace('.svgbw', '.svg', $data_to_db['qrcode']);
-                 break;
-             case 'eps':
-                 $outputInterface = QREps::class;
-                 $imageFormat = 'eps';
-                 break;
-         }
+        $data_to_db['filename'] = $this->sanitizeFilename($data_to_db['filename']);
+        $filename = $this->getSafeFilePath($data_to_db['filename'], $fileExt);
 
-
-        if(!file_exists(SAVED_QRCODE_DIRECTORY.$data_to_db['filename'].'.' . $fileExt)){
+        if(!file_exists($filename)){
             $eccLevel = constant(EccLevel::class.'::'.strtoupper($options['errorCorrectionLevel']));
 
             $qroptions                       = new QROptions;
@@ -276,8 +290,6 @@ class Qrcode {
                 $content = (new QRCodeEx($qroptions))->render(urldecode($data_to_qrcode));
             }
 
-            $filename = SAVED_QRCODE_DIRECTORY.$data_to_db['filename'].'.' . $fileExt;
-
             try
             {
                 file_put_contents($filename, $content);
@@ -320,17 +332,24 @@ class Qrcode {
         $db = getDbInstance();
         $old_qrcode = $this->getQrcode($input_data["id"]);
 
-        $data_to_db['qrcode'] = $data_to_db['filename'].'.'.$old_qrcode["format"];
+        $data_to_db['filename'] = $this->sanitizeFilename($data_to_db['filename']);
+        $oldFormat = preg_replace('/[^a-zA-Z0-9]/', '', strtolower($old_qrcode["format"]));
+        $data_to_db['qrcode'] = $data_to_db['filename'] . '.' . $oldFormat;
 
-        if(!file_exists(SAVED_QRCODE_DIRECTORY.$data_to_db['filename'].'.'.$old_qrcode["format"]) || $data_to_db['filename'] == $input_data["old_filename"]){
+        $oldFile = $this->getSafeFilePath($old_qrcode["filename"], $oldFormat);
+        $newFile = $this->getSafeFilePath($data_to_db['filename'], $oldFormat);
+
+        if(!file_exists($newFile) || $data_to_db['filename'] === $this->sanitizeFilename($input_data["old_filename"])){
             $db->where('id', $input_data["id"]);
             $stat = $db->update($this->table, $data_to_db);
             
-            try{
-                rename(SAVED_QRCODE_DIRECTORY.$old_qrcode["qrcode"], SAVED_QRCODE_DIRECTORY.$data_to_db['filename'].'.'.$old_qrcode["format"]);
-            }
-            catch(Exception $e){
-                $this->failure($e->getMessage());
+            if (file_exists($oldFile) && $oldFile !== $newFile) {
+                try{
+                    rename($oldFile, $newFile);
+                }
+                catch(Exception $e){
+                    $this->failure($e->getMessage());
+                }
             }
         }
         else
@@ -357,11 +376,14 @@ class Qrcode {
         $db->where('id', $id);
         $status = $db->delete($this->table);
         
-        try{
-            unlink(SAVED_QRCODE_DIRECTORY.$qrcode["filename"].'.'.$qrcode["format"]);
-        }
-        catch(Exception $e){
-            $this->failure($e->getMessage());
+        $filePath = $this->getSafeFilePath($qrcode["filename"], $qrcode["format"]);
+        if (file_exists($filePath)) {
+            try{
+                unlink($filePath);
+            }
+            catch(Exception $e){
+                $this->failure($e->getMessage());
+            }
         }
 
         if ($status)
