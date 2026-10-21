@@ -2,8 +2,25 @@
 //Note: This file should be included first in every php page.
 require_once ('environment.php');
 
-error_reporting(E_ALL);
-ini_set('display_errors', 'On');
+if (defined('TYPE') && in_array(strtolower(TYPE), ['dev', 'development', 'debug'], true)) {
+    error_reporting(E_ALL);
+    ini_set('display_errors', '1');
+} else {
+    error_reporting(E_ALL & ~E_NOTICE & ~E_DEPRECATED);
+    ini_set('display_errors', '0');
+    ini_set('log_errors', '1');
+}
+
+if (session_status() === PHP_SESSION_NONE) {
+    $isSecure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
+    ini_set('session.cookie_httponly', '1');
+    ini_set('session.use_only_cookies', '1');
+    ini_set('session.cookie_samesite', 'Lax');
+    if ($isSecure) {
+        ini_set('session.cookie_secure', '1');
+    }
+}
+
 define('BASE_PATH', dirname(dirname(__FILE__)));
 define('CURRENT_PAGE', basename($_SERVER['REQUEST_URI']));
 define('SCRIPT_NAME', ltrim(dirname($_SERVER['SCRIPT_NAME']), '/'));

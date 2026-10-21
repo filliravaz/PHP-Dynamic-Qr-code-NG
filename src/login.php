@@ -1,7 +1,7 @@
 <?php
 session_start();
 require_once 'config/config.php';
-$token = bin2hex(openssl_random_pseudo_bytes(16));
+$token = bin2hex(random_bytes(16));
 
 // If User has already logged in, redirect to dashboard page.
 if (isset($_SESSION['user_logged_in']) && $_SESSION['user_logged_in'] === TRUE)
@@ -34,8 +34,9 @@ if (isset($_COOKIE['series_id']) && isset($_COOKIE['remember_token']))
                 exit;
             }
 
+            session_regenerate_id(true);
 			$_SESSION['user_logged_in'] = TRUE;
-            $_SESSION['user_id'] = $row['id'];
+            $_SESSION['user_id'] = (int)$row['id'];
 			$_SESSION['type'] = $row['type'];
 			header('Location: index.php');
 			exit;
@@ -114,7 +115,7 @@ if (isset($_COOKIE['series_id']) && isset($_COOKIE['remember_token']))
 				<div class="alert alert-danger alert-dismissable">
 					<button type="button" class="close" data-dismiss="alert" aria-hidden="true">×</button>
 					<?php
-					echo $_SESSION['login_failure'];
+					echo htmlspecialchars($_SESSION['login_failure'], ENT_QUOTES, 'UTF-8');
 					unset($_SESSION['login_failure']);
 					?>
 				</div>

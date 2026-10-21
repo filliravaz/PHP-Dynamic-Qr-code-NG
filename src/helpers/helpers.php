@@ -1,9 +1,7 @@
 <?php
 /**
- * Function to generate random string.
+ * Function to generate random string using cryptographically secure random_int.
  * The function takes an integer n as input and generates a string by concatenating n characters chosen randomly from a domain.
-
-N.B. In our case the integer n is randomly chosen between a range of 5 and 8. I chose this "short" range to not overdo the length of the identifier
  */
 function randomString($n) {
 
@@ -15,23 +13,18 @@ function randomString($n) {
 
 	// Loop to create random string
 	for ($i = 0; $i < $n; $i++) {
-		// Generate a random index to pick characters
-		$index = rand(0, $len - 1);
-
-		// Concatenating the character
-		// in resultant string
-		$generated_string = $generated_string . $domain[$index];
+		$index = random_int(0, $len - 1);
+		$generated_string .= $domain[$index];
 	}
 
 	return $generated_string;
 }
 
 /**
- *
+ * Generate cryptographically secure hex token
  */
-function getSecureRandomToken() {
-	$token = bin2hex(openssl_random_pseudo_bytes(16));
-	return $token;
+function getSecureRandomToken($bytes = 16) {
+	return bin2hex(random_bytes($bytes));
 }
 
 /**
@@ -67,19 +60,27 @@ function validateCsrfToken($token = null) {
  * Clear Auth Cookie
  */
 function clearAuthCookie() {
-
+	$isSecure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
+	$clearOptions = [
+		'expires' => time() - 3600,
+		'path' => '/',
+		'secure' => $isSecure,
+		'httponly' => true,
+		'samesite' => 'Lax'
+	];
 	unset($_COOKIE['series_id']);
 	unset($_COOKIE['remember_token']);
-	setcookie('series_id', '', -1, '/');
-	setcookie('remember_token', '', -1, '/');
+	setcookie('series_id', '', $clearOptions);
+	setcookie('remember_token', '', $clearOptions);
 }
+
 /**
  *
  */
 function clean_input($data) {
 	$data = trim($data);
 	$data = stripslashes($data);
-	$data = htmlspecialchars($data);
+	$data = htmlspecialchars($data, ENT_QUOTES, 'UTF-8');
 	return $data;
 }
 
