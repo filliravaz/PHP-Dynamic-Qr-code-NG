@@ -458,15 +458,21 @@
       }
     });
 
+    const csrfToken = $('input[name=csrf_token]').val() || '';
+
     const data = {
       action: $('select[name=action]').val(),
       params: params,
-      type: $('input[name=type]').val()
+      type: $('input[name=type]').val(),
+      csrf_token: csrfToken
     }
 
     $.ajax({
       url: './bulk_action.php',
       method: "POST",
+      headers: {
+        'X-CSRF-Token': csrfToken
+      },
       data: JSON.stringify(data),
       dataType: "json",
       contentType: 'application/json',
@@ -480,15 +486,16 @@
           }
         }
 
-        if (res.status == 400) {
-          $('#err-msg').empty();
-          $('#err-msg').append('<i class="fas fa-exclamation-circle"></i> ' + res.data);
+        if (res.status == 400 || res.status == 403) {
+          const $err = $('#err-msg').empty().append('<i class="fas fa-exclamation-circle"></i> ');
+          $err.append(document.createTextNode(' ' + (res.data || 'Error occurred')));
           $('#err-msg').css('display', 'block');
         }
       },
       error: (err) => {
-        $('#err-msg').empty();
-        $('#err-msg').append('<i class="fas fa-exclamation-circle"></i> ' + err.responseText);
+        const errorText = (err && err.responseText) ? err.responseText : 'An unexpected error occurred.';
+        const $err = $('#err-msg').empty().append('<i class="fas fa-exclamation-circle"></i> ');
+        $err.append(document.createTextNode(' ' + errorText));
         $('#err-msg').css('display', 'block');
         console.log(err);
       }

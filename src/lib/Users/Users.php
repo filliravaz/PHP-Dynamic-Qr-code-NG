@@ -33,19 +33,14 @@ class Users
 
     public function getAllUsers() {
         $db = getDbInstance();
-        return $db->get(DATABASE_PREFIX.'users');
+        return $db->get('users');
     }
 
     public function getUser($id) {
         $db = getDbInstance();
 
         $db->where('id', $id);
-        $result = $db->getOne('users');
-
-        if($result !== NULL)
-            return $result;
-        else
-            $this->failure("User not found");
+        return $db->getOne('users');
     }
     
     /**
@@ -57,6 +52,9 @@ class Users
         $data_to_db["username"] = $input_data["username"];
         $data_to_db['password'] = password_hash($input_data['password'], PASSWORD_DEFAULT);
         $data_to_db["type"] = $input_data["type"];
+        // Force newly created users to change their initial password on first login
+        $data_to_db["must_change_password"] = 1;
+        $data_to_db["session_version"] = 1;
 
         $db->where('username', $data_to_db['username']);
         $db->get('users');
@@ -89,9 +87,41 @@ class Users
             $this->failure('Username already exists', 'Location: user.php?'.$query_string);
         }
 
+        $db->where('id', $input_data["id"]);
+        $currentUser = $db->getOne('users');
+
         $data_to_db["username"] = $input_data["username"];
-        $data_to_db['password'] = password_hash($input_data['password'], PASSWORD_DEFAULT);
         $data_to_db["type"] = $input_data["type"];
+
+        $roleChanged = ($currentUser && isset($currentUser['type']) && $currentUser['type'] !== $input_data['type']);
+        if ($roleChanged && empty($data_to_db['session_version'])) {
+            $data_to_db['session_version'] = (int)($currentUser['session_version'] ?? 1) + 1;
+            if (isset($_SESSION['user_id']) && (int)$_SESSION['user_id'] === (int)$input_data['id']) {
+                $_SESSION['session_version'] = $data_to_db['session_version'];
+                $_SESSION['type'] = $input_data['type'];
+            }
+        }
+
+        if (!empty($input_data['password'])) {
+            $isSamePassword = (!empty($currentUser['password']) && password_verify($input_data['password'], $currentUser['password']));
+            if (!$isSamePassword) {
+                $data_to_db['password'] = password_hash($input_data['password'], PASSWORD_DEFAULT);
+                $data_to_db['series_id'] = null;
+                $data_to_db['remember_token'] = null;
+                $data_to_db['expires'] = null;
+                $data_to_db['session_version'] = (int)($currentUser['session_version'] ?? 1) + 1;
+                // When an administrator changes another user's password, force password change on next login
+                if (isset($_SESSION['user_id']) && (int)$_SESSION['user_id'] !== (int)$input_data['id']) {
+                    $data_to_db["must_change_password"] = 1;
+                } else {
+                    $data_to_db["must_change_password"] = 0;
+                    $_SESSION['session_version'] = $data_to_db['session_version'];
+                }
+            } else {
+                // Password unchanged: preserve existing flag
+                $data_to_db["must_change_password"] = (int)($currentUser['must_change_password'] ?? 0);
+            }
+        }
 
 	    $db->where('id', $input_data["id"]);
 	    $stat = $db->update('users', $data_to_db);
@@ -113,6 +143,12 @@ class Users
         }
         
         $db = getDbInstance();
+        // Disassociate orphaned QR codes before deleting user
+        $db->where('id_owner', $id);
+        $db->update('dynamic_qrcodes', ['id_owner' => null]);
+        $db->where('id_owner', $id);
+        $db->update('static_qrcodes', ['id_owner' => null]);
+
         $db->where('id', $id);
         $stat = $db->delete('users');
 

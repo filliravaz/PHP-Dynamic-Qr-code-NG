@@ -1,5 +1,5 @@
 <?php
-include 'config/config.php';
+require_once 'config/config.php';
 
 if ($_SERVER["REQUEST_METHOD"] !== "GET" || !isset($_GET['id'])) {
     die("Method not allowed. Check id parameter");
@@ -32,16 +32,20 @@ if (!$db->update('dynamic_qrcodes', $data)) {
     die("Failed to update scan count");
 }
 
-if ($qrcode['state'] == 'enable') {
-    // Validation and escaping of the URL to avoid XSS attacks
-    $link = filter_var($qrcode['link'], FILTER_VALIDATE_URL);
-    if ($link) {
-        echo '<meta http-equiv="refresh" content="0; URL=' . htmlspecialchars($link, ENT_QUOTES, 'UTF-8') . '" />';
-        echo 'Loading...'; // You can include a custom page to display during the redirect
+if ($qrcode['state'] === 'enable') {
+    $rawLink = trim($qrcode['link'] ?? '');
+    // SEC-08: Enforce explicit scheme allowlisting (http/https only) and issue 302 HTTP redirect
+    if (preg_match('/^https?:\/\//i', $rawLink) && filter_var($rawLink, FILTER_VALIDATE_URL)) {
+        header("Location: " . $rawLink, true, 302);
+        exit;
     } else {
+        http_response_code(400);
         echo 'Invalid URL';
+        exit;
     }
 } else {
+    http_response_code(403);
     echo 'Disabled link';
+    exit;
 }
 ?>

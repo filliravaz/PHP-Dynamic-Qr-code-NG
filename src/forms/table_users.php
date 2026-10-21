@@ -14,19 +14,19 @@
         <tbody>
             <?php foreach ($rows as $row): ?>
             <tr>
-                <td><?php echo $row['id']; ?></td>
-                <td><?php echo htmlspecialchars($row['username']); ?></td>
-                <td><?php echo htmlspecialchars($row['type']); ?></td>
+                <td><?php echo (int)$row['id']; ?></td>
+                <td><?php echo htmlspecialchars($row['username'], ENT_QUOTES, 'UTF-8'); ?></td>
+                <td><?php echo htmlspecialchars($row['type'], ENT_QUOTES, 'UTF-8'); ?></td>
                 <td>
                     <!-- EDIT -->
-                    <a href="user.php?edit=true&id=<?php echo $row['id']; ?>" class="btn btn-primary"><i class="fas fa-edit"></i></a>
+                    <a href="user.php?edit=true&id=<?php echo (int)$row['id']; ?>" class="btn btn-primary"><i class="fas fa-edit"></i></a>
                     
                     <!-- DELETE -->
                     <a
                             class="btn btn-danger delete_btn"
                             data-toggle="modal"
                             data-target="#delete-modal"
-                            data-del_id="<?php echo $row["id"];?>"
+                            data-del_id="<?php echo (int)$row["id"];?>"
                     ><i class="fas fa-trash"></i></a>
                 </td>
             </tr>
@@ -56,6 +56,7 @@
                 </div>
                 <div class="modal-body">
                     <input type="hidden" name="del_id" id="del_id" value="">
+                    <input type="hidden" name="csrf_token" value="<?php echo getCsrfToken(); ?>">
                     <p>Are you sure you want to delete this row</p>
                 </div>
                 <div class="modal-footer">

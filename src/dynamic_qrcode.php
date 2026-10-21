@@ -1,6 +1,6 @@
 <?php
-session_start();
 require_once 'config/config.php';
+session_start();
 require_once BASE_PATH.'/includes/auth_validate.php';
 require_once BASE_PATH . '/lib/DynamicQrcode/DynamicQrcode.php';
 
@@ -10,34 +10,43 @@ $edit = false;
 if($_SERVER["REQUEST_METHOD"] === "GET" && isset($_GET["edit"]) && $_GET["edit"] == "true" && isset($_GET["id"])) {
     $edit = true;
     $dynamic_qrcode = $dynamic_qrcode_instance->getQrcode($_GET["id"]);
+    if ($_SESSION['type'] !== 'super' && (empty($dynamic_qrcode['id_owner']) || (int)$dynamic_qrcode['id_owner'] !== (int)$_SESSION['user_id'])) {
+        $_SESSION['failure'] = "You cannot edit this qrcode because it belongs to another user";
+        header('Location: dynamic_qrcodes.php');
+        exit();
+    }
 }
 
-if($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["del_id"])) {
-    $dynamic_qrcode_instance->deleteQrcode($_POST["del_id"]);
-}
+if($_SERVER["REQUEST_METHOD"] === "POST") {
+    if (!validateCsrfToken()) {
+        $_SESSION['failure'] = "Invalid or missing CSRF token";
+        header('Location: dynamic_qrcodes.php');
+        exit();
+    }
 
-if($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["edit"])) {
-    if(
+    if(isset($_POST["del_id"])) {
+        $dynamic_qrcode_instance->deleteQrcode($_POST["del_id"]);
+    } else if(isset($_POST["edit"])) {
+        if(
             isset($_POST["identifier"]) &&
             isset($_POST["filename"]) &&
             isset($_POST["link"]) &&
             isset($_POST["state"]) &&
             isset($_POST["id_owner"]) &&
             isset($_POST["id"])
-    )
-        $dynamic_qrcode_instance->editQrcode($_POST);
-}
-
-if($_SERVER["REQUEST_METHOD"] === "POST" && !isset($_POST["edit"])) {
-    if(
-        isset($_POST["foreground"]) &&
-        isset($_POST["background"]) &&
-        isset($_POST["link"]) &&
-        isset($_POST["filename"]) &&
-        isset($_POST["format"]) &&
-        isset($_POST["id_owner"])
-    )
-        $dynamic_qrcode_instance->addQrcode($_POST);
+        )
+            $dynamic_qrcode_instance->editQrcode($_POST);
+    } else {
+        if(
+            isset($_POST["foreground"]) &&
+            isset($_POST["background"]) &&
+            isset($_POST["link"]) &&
+            isset($_POST["filename"]) &&
+            isset($_POST["format"]) &&
+            isset($_POST["id_owner"])
+        )
+            $dynamic_qrcode_instance->addQrcode($_POST);
+    }
 }
 ?>
 <!DOCTYPE html>

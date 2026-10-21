@@ -7,7 +7,7 @@
                     <span class="input-group-text"><i class="fa fa-user"></i></span>
                 </div>
                 
-                <input type="text" name="username" placeholder="Username" class="form-control" required="required" value="<?php echo ($edit) ? $user['username'] : ''; ?>" autocomplete="off">
+                <input type="text" name="username" placeholder="Username" class="form-control" required="required" value="<?php echo ($edit) ? htmlspecialchars($user['username'], ENT_QUOTES, 'UTF-8') : ''; ?>" autocomplete="off">
             </div>
         </div>
     </div>
@@ -40,8 +40,9 @@
             </div>
         </div>
     </div>
+    <input type="hidden" name="csrf_token" value="<?php echo getCsrfToken(); ?>"/>
     <?php if($edit) { ?>
-        <input type="hidden" name="id" value="<?php echo $user['id'];?>"/>
+        <input type="hidden" name="id" value="<?php echo (int)$user['id'];?>"/>
         <input type="hidden" name="edit" value="true"/>
     <?php } ?>
 </fieldset>

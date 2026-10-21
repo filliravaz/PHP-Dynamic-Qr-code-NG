@@ -11,17 +11,33 @@
 
 class vCard
 {
-    
-
     private $sData;
+
+    /**
+     * Sanitize single-line vCard property values to prevent newline injection (SEC-17).
+     */
+    private function cleanProp($val)
+    {
+        return str_replace(["\r", "\n"], '', (string)$val);
+    }
+
+    /**
+     * Sanitize and escape multi-line vCard values per RFC 6350 (SEC-17).
+     */
+    private function cleanMultiline($val)
+    {
+        $val = str_replace('\\', '\\\\', (string)$val);
+        $val = str_replace(["\r\n", "\r", "\n"], "\\n", $val);
+        return $val;
+    }
 
     /**
      * Constructor.
      */
     public function __construct()
     {
-        $this->sData = 'BEGIN:VCARD'."\n";
-        $this->sData .= 'VERSION:4.0'."\n";
+        $this->sData = "BEGIN:VCARD\n";
+        $this->sData .= "VERSION:4.0\n";
     }
 
     /**
@@ -33,10 +49,9 @@ class vCard
      */
     public function name($sName)
     {
-        $this->sData .= 'N:'.$sName."\n";
+        $this->sData .= 'N:' . $this->cleanProp($sName) . "\n";
         return $this;
     }
-
 
     /**
      * @param string $sAddress
@@ -45,8 +60,8 @@ class vCard
      */
     public function address($sAddress, $sCity, $sPostcode, $sState)
     {
-        $this->sData .= 'ADR:;;'.$sAddress.';';
-        $this->sData .= $sCity.';'.$sPostcode.';'.$sState."\n";
+        $this->sData .= 'ADR:;;' . $this->cleanProp($sAddress) . ';';
+        $this->sData .= $this->cleanProp($sCity) . ';' . $this->cleanProp($sPostcode) . ';' . $this->cleanProp($sState) . "\n";
         return $this;
     }
 
@@ -57,7 +72,7 @@ class vCard
      */
     public function nickName($sNickname)
     {
-        $this->sData .= 'NICKNAME:'.$sNickname."\n";
+        $this->sData .= 'NICKNAME:' . $this->cleanProp($sNickname) . "\n";
         return $this;
     }
 
@@ -68,7 +83,7 @@ class vCard
      */
     public function email($sMail)
     {
-        $this->sData .= 'EMAIL;TYPE=PREF,INTERNET:'.$sMail."\n";
+        $this->sData .= 'EMAIL;TYPE=PREF,INTERNET:' . $this->cleanProp($sMail) . "\n";
         return $this;
     }
 
@@ -79,7 +94,7 @@ class vCard
      */
     public function workPhone($sVal)
     {
-        $this->sData .= 'TEL;;TYPE=work:'.$sVal."\n";
+        $this->sData .= 'TEL;;TYPE=work:' . $this->cleanProp($sVal) . "\n";
         return $this;
     }
 
@@ -90,7 +105,7 @@ class vCard
      */
     public function homePhone($sVal)
     {
-        $this->sData .= 'TEL;;TYPE=home:'.$sVal."\n";
+        $this->sData .= 'TEL;;TYPE=home:' . $this->cleanProp($sVal) . "\n";
         return $this;
     }
     
@@ -101,7 +116,7 @@ class vCard
      */
     public function cellPhone($sVal)
     {
-        $this->sData .= 'TEL:'.$sVal."\n";
+        $this->sData .= 'TEL:' . $this->cleanProp($sVal) . "\n";
         return $this;
     }
 
@@ -112,8 +127,9 @@ class vCard
      */
     public function url($sUrl)
     {
+        $sUrl = $this->cleanProp($sUrl);
         $sUrl = (substr($sUrl, 0, 4) != 'http') ? 'http://'.$sUrl : $sUrl;
-        $this->sData .= 'URL:'.$sUrl."\n";
+        $this->sData .= 'URL:' . $sUrl . "\n";
         return $this;
     }
 
@@ -126,7 +142,7 @@ class vCard
      */
     public function categories($sCategories)
     {
-        $this->sData .= 'CATEGORIES:'.$sCategories."\n";
+        $this->sData .= 'CATEGORIES:' . $this->cleanProp($sCategories) . "\n";
         return $this;
     }
 
@@ -142,18 +158,18 @@ class vCard
     public function photo($sImgUrl)
     {
         if($sImgUrl != NULL){
-        
-        $bIsImgExt = strtolower(substr(strrchr($sImgUrl, '.'), 1)); // Get the file extension.
+            $sImgUrl = $this->cleanProp($sImgUrl);
+            $bIsImgExt = strtolower(substr(strrchr($sImgUrl, '.'), 1)); // Get the file extension.
 
-        if ($bIsImgExt == 'jpeg' || $bIsImgExt == 'jpg' || $bIsImgExt == 'png' || $bIsImgExt == 'gif') {
-            $sExt = strtoupper($bIsImgExt);
-        } else {
-            throw new InvalidArgumentException('Invalid format Image!');
-        }
+            if ($bIsImgExt == 'jpeg' || $bIsImgExt == 'jpg' || $bIsImgExt == 'png' || $bIsImgExt == 'gif') {
+                $sExt = strtoupper($bIsImgExt);
+            } else {
+                throw new InvalidArgumentException('Invalid format Image!');
+            }
 
-        $this->sData .= 'PHOTO;VALUE=URL;TYPE='.$sExt.':'.$sImgUrl."\n";
+            $this->sData .= 'PHOTO;VALUE=URL;TYPE='.$sExt.':'.$sImgUrl."\n";
 
-        return $this;
+            return $this;
         }
     }
 
@@ -166,16 +182,12 @@ class vCard
      */
     public function role($sRole)
     {
-        $this->sData .= 'ROLE:'.$sRole."\n";
+        $this->sData .= 'ROLE:' . $this->cleanProp($sRole) . "\n";
         return $this;
     }
 
     /**
      * The organization / company.
-     *
-     * The name and optionally the unit(s) of the organization
-     * associated with the vCard object. This property is based on the X.520 Organization Name
-     * attribute and the X.520 Organization Unit attribute.
      *
      * @param string $sOrg e.g., Google;GMail Team;Spam Detection Squad
      *
@@ -183,7 +195,7 @@ class vCard
      */
     public function organization($sOrg)
     {
-        $this->sData .= 'ORG:'.$sOrg."\n";
+        $this->sData .= 'ORG:' . $this->cleanProp($sOrg) . "\n";
         return $this;
     }
 
@@ -196,7 +208,7 @@ class vCard
      */
     public function note($sText)
     {
-        $this->sData .= 'NOTE:'.$sText."\n";
+        $this->sData .= 'NOTE:' . $this->cleanMultiline($sText) . "\n";
         return $this;
     }
 

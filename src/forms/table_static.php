@@ -3,6 +3,7 @@
         <div id="err-msg"></div>
         <div class="bulk-action-wrapper">
             <form id="bulk-action" action="bulk_action.php" method="POST">
+                <input type="hidden" name="csrf_token" value="<?php echo getCsrfToken(); ?>">
                 <div class="col-sm-12 mb-2" style="margin-left: 10px">
                     <div class="row">
                         <div class="col-5 col-md-2">
@@ -39,8 +40,8 @@
         <tbody>
             <?php foreach ($rows as $row): ?>
             <tr>
-                <td><input type="checkbox" name="action[]" value="<?=$row['id']?>" onchange="updateBulkActionVisibility()"></td>
-                <td><?php echo $row['id']; ?></td>
+                <td><input type="checkbox" name="action[]" value="<?=(int)$row['id']?>" onchange="updateBulkActionVisibility()"></td>
+                <td><?php echo (int)$row['id']; ?></td>
                 <td>
                     <?php
                     if(!isset($row['id_owner']))
@@ -50,33 +51,37 @@
                         $users = new Users();
                         $user = $users->getUser($row['id_owner']);
                         if($user !== NULL)
-                            echo $user["username"];
+                            echo htmlspecialchars($user["username"], ENT_QUOTES, 'UTF-8');
                         else
                             echo "";
                     }
                     ?>
                 </td>
-                <td><?php echo htmlspecialchars($row['filename']); ?></td>
-                <td><?php echo htmlspecialchars($row['type']); ?></td>
-                <td><?php echo htmlspecialchars_decode($row['content']); ?></td>
+                <td><?php echo htmlspecialchars($row['filename'], ENT_QUOTES, 'UTF-8'); ?></td>
+                <td><?php echo htmlspecialchars($row['type'], ENT_QUOTES, 'UTF-8'); ?></td>
                 <td>
-                    <?php echo '<img src="'.SAVED_QRCODE_FOLDER.htmlspecialchars($row['qrcode']).'" width="100" height="100">'; ?>
+                    <?php
+                    echo renderSafeStaticContent($row['content'] ?? '');
+                    ?>
+                </td>
+                <td>
+                    <?php echo '<img src="download.php?type=static&amp;id=' . (int)$row['id'] . '&amp;view=1" width="100" height="100" alt="QR Code">'; ?>
                 </td>
                 <td>
                     
                     <!-- EDIT -->
-                    <a href="static_qrcode.php?edit=true&id=<?php echo $row['id']; ?>" class="btn btn-primary"><i class="fas fa-edit"></i></a>
+                    <a href="static_qrcode.php?edit=true&id=<?php echo (int)$row['id']; ?>" class="btn btn-primary"><i class="fas fa-edit"></i></a>
                     
                     <!-- DELETE -->
                     <a
                             class="btn btn-danger delete_btn"
                             data-toggle="modal"
                             data-target="#delete-modal"
-                            data-del_id="<?php echo $row["id"];?>"
+                            data-del_id="<?php echo (int)$row["id"];?>"
                     ><i class="fas fa-trash"></i></a>
 
                     <!-- DOWNLOAD -->
-                    <a href="<?php echo SAVED_QRCODE_FOLDER.htmlspecialchars($row['qrcode']); ?>" class="btn btn-primary" download><i class="fa fa-download"></i></a>
+                    <a href="download.php?type=static&amp;id=<?php echo (int)$row['id']; ?>" class="btn btn-primary" download><i class="fa fa-download"></i></a>
                 </td>
             </tr>
             <?php endforeach; ?>
@@ -105,6 +110,7 @@
                 </div>
                 <div class="modal-body">
                     <input type="hidden" name="del_id" id="del_id" value="">
+                    <input type="hidden" name="csrf_token" value="<?php echo getCsrfToken(); ?>">
                     <p>Are you sure you want to delete this row?</p>
                 </div>
                 <div class="modal-footer">

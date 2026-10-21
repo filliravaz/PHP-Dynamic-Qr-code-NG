@@ -1,33 +1,35 @@
 <?php
-require_once BASE_PATH . '/config/config.php';
 
 // Get Input data from query string
-$order_by	= filter_input(INPUT_GET, 'order_by', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-$order_dir	= filter_input(INPUT_GET, 'order_dir', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
-$search_str	= filter_input(INPUT_GET, 'search_str', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+$order_by	= filter_input(INPUT_GET, 'order_by', FILTER_DEFAULT);
+$order_dir	= filter_input(INPUT_GET, 'order_dir', FILTER_DEFAULT);
+$search_str	= filter_input(INPUT_GET, 'search_str', FILTER_DEFAULT);
 
-// If filter types are not selected we show latest added data first
-if (!$order_by) {
+$allowed_columns = (isset($select) && is_array($select)) ? $select : ['id'];
+
+// Whitelist order_by column against table schema columns
+if (!$order_by || !in_array($order_by, $allowed_columns, true)) {
 	$order_by = 'id';
 }
 
-if (!$order_dir) {
-	$order_dir = 'Desc';
-}
+// Whitelist order direction strictly to ASC or DESC
+$order_dir = (strtoupper((string)$order_dir) === 'ASC') ? 'ASC' : 'DESC';
 
-// Start building query according to input parameters
-// If search string
-
-if ($search_str) {
+// Build search query safely with grouped parenthesized conditions and parameter binding
+if (!empty($search_str) && isset($search_fields) && is_array($search_fields)) {
+    $searchClauses = [];
+    $searchParams = [];
     foreach ($search_fields as $value) {
-        $db->orwhere($value, '%' . $search_str . '%', 'like');
+        if (in_array($value, $allowed_columns, true)) {
+            $searchClauses[] = "`{$value}` LIKE ?";
+            $searchParams[] = '%' . $search_str . '%';
+        }
+    }
+    if (!empty($searchClauses)) {
+        $db->where('(' . implode(' OR ', $searchClauses) . ')', $searchParams);
     }
 }
 
-// If order direction option selected
-if ($order_dir) {
-	$db->orderBy($order_by, $order_dir);
-}
-
-
+// Apply whitelisted ordering to query
+$db->orderBy($order_by, $order_dir);
 ?>

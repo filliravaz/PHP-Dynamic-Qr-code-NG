@@ -1,0 +1,7 @@
+version: "3.2"
+services:
+  php-dynamic-qrcode:
+    pull_policy: build
+    build:
+      context: .
+      dockerfile: Dockerfile

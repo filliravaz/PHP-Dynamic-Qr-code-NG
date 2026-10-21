@@ -56,7 +56,7 @@ class StaticQrcode {
     {
         if($text != NULL){
             $this->sData = $text;
-            $this->sContent = '<strong>Text:</strong> '.$text;
+            $this->sContent = '<strong>Text:</strong> ' . htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
             $this->addQrcode("text");
         }
         else
@@ -73,7 +73,9 @@ class StaticQrcode {
     {
         if($email != NULL && $message != NULL){
             $this->sData = 'MATMSG:TO:'.$email.';SUB:'.$subject.';BODY:'.$message.';';
-            $this->sContent = '<strong>Email:</strong> '.$email.'<br>'.'<strong>Subject:</strong> '.$subject.'<br>'.'<strong>Message:</strong> '.$message;
+            $this->sContent = '<strong>Email:</strong> ' . htmlspecialchars($email, ENT_QUOTES, 'UTF-8') . '<br>' .
+                              '<strong>Subject:</strong> ' . htmlspecialchars($subject, ENT_QUOTES, 'UTF-8') . '<br>' .
+                              '<strong>Message:</strong> ' . htmlspecialchars($message, ENT_QUOTES, 'UTF-8');
 
             $this->addQrcode("email");
         }
@@ -90,7 +92,7 @@ class StaticQrcode {
     {
         if($phone_number != NULL){
             $this->sData = 'TEL:'.$country_code.$phone_number;  
-            $this->sContent = '<strong>Phone number:</strong> '.$country_code.$phone_number;
+            $this->sContent = '<strong>Phone number:</strong> ' . htmlspecialchars($country_code . $phone_number, ENT_QUOTES, 'UTF-8');
 
             $this->addQrcode("phone");
         }
@@ -108,7 +110,8 @@ class StaticQrcode {
     {
         if($phone_number != NULL && $message != NULL){
             $this->sData = 'SMSTO:'.$country_code.$phone_number.':'.$message;  
-            $this->sContent = '<strong>Phone number:</strong> '.$country_code.$phone_number.'<br>'.'<strong>Message:</strong> '.$message;
+            $this->sContent = '<strong>Phone number:</strong> ' . htmlspecialchars($country_code . $phone_number, ENT_QUOTES, 'UTF-8') . '<br>' .
+                              '<strong>Message:</strong> ' . htmlspecialchars($message, ENT_QUOTES, 'UTF-8');
 
             $this->addQrcode("sms");
         }
@@ -125,8 +128,9 @@ class StaticQrcode {
     public function whatsappQrcode($country_code, $phone_number, $message)
     {
         if($phone_number != NULL){
-            $this->sData = 'https://wa.me/'.$country_code.$phone_number.'?text='.$message;  
-            $this->sContent = '<strong>Phone number:</strong> '.$country_code.$phone_number.'<br>'.'<strong>Message:</strong> '.$message;
+            $this->sData = 'https://wa.me/' . rawurlencode($country_code . $phone_number) . '?text=' . rawurlencode($message);  
+            $this->sContent = '<strong>Phone number:</strong> ' . htmlspecialchars($country_code . $phone_number, ENT_QUOTES, 'UTF-8') . '<br>' .
+                              '<strong>Message:</strong> ' . htmlspecialchars($message, ENT_QUOTES, 'UTF-8');
 
             $this->addQrcode("whatsapp");
         }
@@ -142,7 +146,7 @@ class StaticQrcode {
     {
         if($skype_username != NULL){
             $this->sData = 'skype:'.$skype_username.'?call';
-            $this->sContent = '<strong>Skype username:</strong> '.$skype_username;
+            $this->sContent = '<strong>Skype username:</strong> ' . htmlspecialchars($skype_username, ENT_QUOTES, 'UTF-8');
 
             $this->addQrcode("skype");
         }
@@ -159,7 +163,8 @@ class StaticQrcode {
     {
         if($latitude != NULL && $longitude != NULL){
             $this->sData = 'GEO:'.$latitude.','.$longitude.';';
-            $this->sContent = '<strong>Latitude:</strong> '.$latitude.'<br>'.'<strong>Longitude:</strong> '.$longitude;
+            $this->sContent = '<strong>Latitude:</strong> ' . htmlspecialchars($latitude, ENT_QUOTES, 'UTF-8') . '<br>' .
+                              '<strong>Longitude:</strong> ' . htmlspecialchars($longitude, ENT_QUOTES, 'UTF-8');
 
             $this->addQrcode("location");
         }
@@ -194,15 +199,24 @@ class StaticQrcode {
             $this->sData = $vcard->get();
             $this->sContent = '<div class="row"><div class="col-sm-4">';
             
-                $this->sContent .= '<strong>Full name:</strong> '.$fullname.'<br>'.'<strong>Nickname:</strong> '.$nickname.'<br>'.'<strong>Email:</strong> '.$email.'<br>'.'<strong>Website:</strong> '.$website.'</div>';
+                $this->sContent .= '<strong>Full name:</strong> ' . htmlspecialchars($fullname, ENT_QUOTES, 'UTF-8') . '<br>' .
+                                   '<strong>Nickname:</strong> ' . htmlspecialchars($nickname, ENT_QUOTES, 'UTF-8') . '<br>' .
+                                   '<strong>Email:</strong> ' . htmlspecialchars($email, ENT_QUOTES, 'UTF-8') . '<br>' .
+                                   '<strong>Website:</strong> ' . htmlspecialchars($website, ENT_QUOTES, 'UTF-8') . '</div>';
             
             $this->sContent .= '<div class="col-sm-4">';
             
-                $this->sContent .= '<strong>Company:</strong> '.$company.'<br>'.'<strong>Role:</strong> '.$role.'<br>'.'<strong>Categories:</strong> '.$categories.'<br>'.'<strong>Note:</strong> '.$note.'</div>';
+                $this->sContent .= '<strong>Company:</strong> ' . htmlspecialchars($company, ENT_QUOTES, 'UTF-8') . '<br>' .
+                                   '<strong>Role:</strong> ' . htmlspecialchars($role, ENT_QUOTES, 'UTF-8') . '<br>' .
+                                   '<strong>Categories:</strong> ' . htmlspecialchars($categories, ENT_QUOTES, 'UTF-8') . '<br>' .
+                                   '<strong>Note:</strong> ' . htmlspecialchars($note, ENT_QUOTES, 'UTF-8') . '</div>';
                 
             $this->sContent .= '<div class="col-sm-4">';
             
-                $this->sContent .= '<strong>Phone:</strong> '.$phone.'<br>'.'<strong>Home Phone:</strong> '.$home_phone.'<br>'.'<strong>Work phone:</strong> '.$work_phone.'<br>'.'<strong>Address:</strong> '.$address.'&nbsp;'.$city.'&nbsp;'.$postcode.'&nbsp;'.$state.'</div>';
+                $this->sContent .= '<strong>Phone:</strong> ' . htmlspecialchars($phone, ENT_QUOTES, 'UTF-8') . '<br>' .
+                                   '<strong>Home Phone:</strong> ' . htmlspecialchars($home_phone, ENT_QUOTES, 'UTF-8') . '<br>' .
+                                   '<strong>Work phone:</strong> ' . htmlspecialchars($work_phone, ENT_QUOTES, 'UTF-8') . '<br>' .
+                                   '<strong>Address:</strong> ' . htmlspecialchars($address, ENT_QUOTES, 'UTF-8') . '&nbsp;' . htmlspecialchars($city, ENT_QUOTES, 'UTF-8') . '&nbsp;' . htmlspecialchars($postcode, ENT_QUOTES, 'UTF-8') . '&nbsp;' . htmlspecialchars($state, ENT_QUOTES, 'UTF-8') . '</div>';
             
             $this->sContent .= '</div>';
 
@@ -224,9 +238,6 @@ class StaticQrcode {
     public function eventQrcode($title, $start, $end, $timezone, $location, $description, $url)
     {
         if($title != NULL && $start != NULL && $end != NULL){
-            header('Content-Type: text/calendar; charset=utf-8');
-            header('Content-Disposition: attachment; filename=invite.ics');
-
             $timezoneFrom = $timezone;
 
             if(empty($timezoneFrom)){
@@ -249,9 +260,14 @@ class StaticQrcode {
             
             $this->sData = $ics->to_string();
             $this->sContent = '<div class="row"><div class="col-sm-4">';
-            $this->sContent .= '<strong>Title:</strong> '.$title.'<br>'.'<strong>Start event:</strong> '.$start.'<br>'.'<strong>End event:</strong> '.$end.'<br>'.'<strong>Time zone:</strong> '.$timezone.'<br></div>';
+            $this->sContent .= '<strong>Title:</strong> ' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '<br>' .
+                               '<strong>Start event:</strong> ' . htmlspecialchars($start, ENT_QUOTES, 'UTF-8') . '<br>' .
+                               '<strong>End event:</strong> ' . htmlspecialchars($end, ENT_QUOTES, 'UTF-8') . '<br>' .
+                               '<strong>Time zone:</strong> ' . htmlspecialchars($timezone, ENT_QUOTES, 'UTF-8') . '<br></div>';
             $this->sContent .= '<div class="col-sm-4">';
-            $this->sContent .= '<strong>Location:</strong> '.$location.'<br>'.'<strong>Description:</strong> '.$description.'<br>'.'<strong>URL:</strong> '.$url.'</div>';
+            $this->sContent .= '<strong>Location:</strong> ' . htmlspecialchars($location, ENT_QUOTES, 'UTF-8') . '<br>' .
+                               '<strong>Description:</strong> ' . htmlspecialchars($description, ENT_QUOTES, 'UTF-8') . '<br>' .
+                               '<strong>URL:</strong> ' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '</div>';
             $this->sContent .= '</div>';
 
             $this->addQrcode("event");
@@ -269,7 +285,8 @@ class StaticQrcode {
     {
         if($url != NULL){
             $this->sData = 'MEBKM:TITLE:'.$title.';URL:'.$url.';';  
-            $this->sContent = '<strong>Title:</strong> '.$title.'<br>'.'<strong>Url:</strong> '.$url;
+            $this->sContent = '<strong>Title:</strong> ' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '<br>' .
+                              '<strong>Url:</strong> ' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
 
             $this->addQrcode("bookmark");
         }
@@ -287,7 +304,9 @@ class StaticQrcode {
     {
         if($ssid != NULL){
             $this->sData = 'WIFI:T:'.$encryption.';S:'.$ssid.';P:'.$password.';';  
-            $this->sContent = '<strong>Encryption:</strong> '.$encryption.'<br>'.'<strong>SSID:</strong> '.$ssid.'<br>'.'<strong>Password:</strong> '.$password;
+            $this->sContent = '<strong>Encryption:</strong> ' . htmlspecialchars($encryption, ENT_QUOTES, 'UTF-8') . '<br>' .
+                              '<strong>SSID:</strong> ' . htmlspecialchars($ssid, ENT_QUOTES, 'UTF-8') . '<br>' .
+                              '<strong>Password:</strong> ' . htmlspecialchars($password, ENT_QUOTES, 'UTF-8');
 
             $this->addQrcode("wifi");
         }
@@ -309,15 +328,30 @@ class StaticQrcode {
     public function paypalQrcode($payment_type, $email, $item_name, $item_id, $amount, $currency, $shipping, $tax_rate)
     {
         if($email != NULL && $item_name != NULL && $amount != NULL){
-            $this->sData = 'https://www.paypal.com/webapps/xorouter?cmd='.$payment_type.'&business='.$email.'&item_name='.$item_name.'&item_number='.$item_id.'&amount='.$amount.'&currency_code='.$currency.'&shipping='.$shipping.'&tax_rate='.$tax_rate;
+            $this->sData = 'https://www.paypal.com/webapps/xorouter?' . http_build_query([
+                'cmd' => $payment_type,
+                'business' => $email,
+                'item_name' => $item_name,
+                'item_number' => $item_id,
+                'amount' => $amount,
+                'currency_code' => $currency,
+                'shipping' => $shipping,
+                'tax_rate' => $tax_rate
+            ]);
             
             $this->sContent = '<div class="row"><div class="col-sm-4">';
             
-                $this->sContent .= '<strong>Payment type:</strong> '.$payment_type.'<br>'.'<strong>Email:</strong> '.$email.'<br>'.'<strong>Item name:</strong> '.$item_name.'<br>'.'<strong>Item id:</strong> '.$item_id.'</div>';
+                $this->sContent .= '<strong>Payment type:</strong> ' . htmlspecialchars($payment_type, ENT_QUOTES, 'UTF-8') . '<br>' .
+                                   '<strong>Email:</strong> ' . htmlspecialchars($email, ENT_QUOTES, 'UTF-8') . '<br>' .
+                                   '<strong>Item name:</strong> ' . htmlspecialchars($item_name, ENT_QUOTES, 'UTF-8') . '<br>' .
+                                   '<strong>Item id:</strong> ' . htmlspecialchars($item_id, ENT_QUOTES, 'UTF-8') . '</div>';
             
             $this->sContent .= '<div class="col-sm-4">';
             
-                $this->sContent .= '<strong>Amount:</strong> '.$amount.'<br>'.'<strong>Currency:</strong> '.$currency.'<br>'.'<strong>Shipping:</strong> '.$shipping.'<br>'.'<strong>Tax rate:</strong> '.$tax_rate.'</div>';
+                $this->sContent .= '<strong>Amount:</strong> ' . htmlspecialchars($amount, ENT_QUOTES, 'UTF-8') . '<br>' .
+                                   '<strong>Currency:</strong> ' . htmlspecialchars($currency, ENT_QUOTES, 'UTF-8') . '<br>' .
+                                   '<strong>Shipping:</strong> ' . htmlspecialchars($shipping, ENT_QUOTES, 'UTF-8') . '<br>' .
+                                   '<strong>Tax rate:</strong> ' . htmlspecialchars($tax_rate, ENT_QUOTES, 'UTF-8') . '</div>';
                 
             $this->sContent .= '</div>';
 
@@ -337,9 +371,18 @@ class StaticQrcode {
     public function bitcoinQrcode($address, $amount, $label, $message)
     {
         if($address != NULL && $amount != NULL){
-            $this->sData = 'bitcoin:'.$address.'?amount='.$amount.'&label='.$label.'&message='.$message;
-            $this->sContent = '<strong>BTC address:</strong> '.$address.'<br>'.'<strong>Amount:</strong> '.$amount.'<br>';
-            $this->sContent .= '<strong>Label:</strong> '.$label.'<br>'.'<strong>Message:</strong> '.$message;
+            $btcParams = ['amount' => $amount];
+            if ($label !== null && $label !== '') {
+                $btcParams['label'] = $label;
+            }
+            if ($message !== null && $message !== '') {
+                $btcParams['message'] = $message;
+            }
+            $this->sData = 'bitcoin:' . rawurlencode($address) . '?' . http_build_query($btcParams);
+            $this->sContent = '<strong>BTC address:</strong> ' . htmlspecialchars($address, ENT_QUOTES, 'UTF-8') . '<br>' .
+                              '<strong>Amount:</strong> ' . htmlspecialchars($amount, ENT_QUOTES, 'UTF-8') . '<br>' .
+                              '<strong>Label:</strong> ' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '<br>' .
+                              '<strong>Message:</strong> ' . htmlspecialchars($message, ENT_QUOTES, 'UTF-8');
         
             $this->addQrcode("bitcoin");
         }
@@ -365,11 +408,12 @@ class StaticQrcode {
                 $this->sData .= '&issuer=' . $issuer;
             }
 
-            $this->sContent = '<strong>Type:</strong> ' . $algorithms . '<br>'.'<strong>Secret:</strong> ' . $secret . '<br>';
-            $this->sContent .= '<strong>Label:</strong> ' . rawurldecode($label);
+            $this->sContent = '<strong>Type:</strong> ' . htmlspecialchars($algorithms, ENT_QUOTES, 'UTF-8') . '<br>' .
+                              '<strong>Secret:</strong> ' . htmlspecialchars($secret, ENT_QUOTES, 'UTF-8') . '<br>' .
+                              '<strong>Label:</strong> ' . htmlspecialchars(rawurldecode($label), ENT_QUOTES, 'UTF-8');
 
             if (!empty($issuer)) {
-                $this->sContent .= '<br><strong>Issuer:</strong> '. rawurldecode($issuer);
+                $this->sContent .= '<br><strong>Issuer:</strong> ' . htmlspecialchars(rawurldecode($issuer), ENT_QUOTES, 'UTF-8');
             }
 
             $this->addQrcode("2fa");
@@ -389,18 +433,19 @@ class StaticQrcode {
      * We save into db the url of qrcode image
      */
     private function addQrcode($type) {
-        if($_POST['id_owner'] != "")
-            $data_to_db['id_owner'] = $_POST['id_owner'];
-        else
-            $data_to_db['id_owner'] = NULL;
+        if ($_SESSION['type'] === 'super') {
+            $data_to_db['id_owner'] = !empty($_POST['id_owner']) ? (int)$_POST['id_owner'] : NULL;
+        } else {
+            $data_to_db['id_owner'] = (int)$_SESSION['user_id'];
+        }
+
         $data_to_db['created_at'] = date('Y-m-d H:i:s');
-        $data_to_db['created_by'] = $_SESSION['user_id'];
-        $data_to_db['filename'] = htmlspecialchars($_POST['filename'], ENT_QUOTES, 'UTF-8');
-        $data_to_db['created_at'] = date('Y-m-d H:i:s');
+        $data_to_db['created_by'] = (int)$_SESSION['user_id'];
+        $data_to_db['filename'] = $this->qrcode_instance->sanitizeFilename($_POST['filename']);
         $data_to_db['type'] = $type;
-        $data_to_db['format'] = $_POST['format'];
+        $data_to_db['format'] = strtolower(trim($_POST['format'] ?? 'png'));
         $data_to_db['qrcode'] = $data_to_db['filename'].'.'.$data_to_db['format'];
-        $data_to_db['content'] = htmlspecialchars($this->sContent, ENT_QUOTES, 'UTF-8');
+        $data_to_db['content'] = $this->sContent;
 
         if(isset($_POST['level']))
             $input_data["level"] = $_POST['level'];
@@ -421,11 +466,17 @@ class StaticQrcode {
      * 
      */
     public function editQrcode($input_data) {
-        if($input_data['id_owner'] != "")
-            $data_to_db['id_owner'] = $input_data['id_owner'];
-        else
-            $data_to_db['id_owner'] = NULL;
-        $data_to_db['filename'] = htmlspecialchars($input_data['filename'], ENT_QUOTES, 'UTF-8');
+        $existing = $this->getQrcode($input_data["id"]);
+        if ($_SESSION['type'] !== 'super') {
+            if (!isset($existing['id_owner']) || (int)$existing['id_owner'] !== (int)$_SESSION['user_id']) {
+                $this->failure("You cannot edit this qrcode because it belongs to another user");
+            }
+            $data_to_db['id_owner'] = (int)$_SESSION['user_id'];
+        } else {
+            $data_to_db['id_owner'] = !empty($input_data['id_owner']) ? (int)$input_data['id_owner'] : NULL;
+        }
+
+        $data_to_db['filename'] = $this->qrcode_instance->sanitizeFilename($input_data['filename']);
         $data_to_db['created_at'] = date('Y-m-d H:i:s');
 
         $this->qrcode_instance->editQrcode($input_data, $data_to_db);
@@ -448,7 +499,7 @@ class StaticQrcode {
             $users = new Users();
             $user = $users->getUser($_SESSION['user_id']);
 
-            if($user["id"] === $qrcode["id_owner"])
+            if(isset($user['id']) && (int)$user["id"] === (int)$qrcode["id_owner"])
                 $this->qrcode_instance->deleteQrcode($id, $async);
             else
                 $this->failure("You cannot delete this qrcode because it's of another user");

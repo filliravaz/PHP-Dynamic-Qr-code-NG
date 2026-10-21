@@ -1,14 +1,15 @@
-<p align="center"><img src="https://www.giandonatoinverso.it/qrcode/dist/img/DynamicQRCode_Original.png"></p>
+# Fork notice
+This repository contains a fork of the original project [giandonatoinverso/php-dynamic-qrcode](https://github.com/giandonatoinverso/php-dynamic-qrcode), which was archived in September 2025. It aims to improve security and functionality. We aim to be backwards compatible, making the new software a drop-in replacement.
+
+---
 
 **PHP Dynamic Qr code** is a script that allows the generation and saving of dynamic and static QR codes. It has a clean, responsive, and user-friendly design. It is based on [AdminLte](https://adminlte.io/), the "Best open source admin dashboard & control panel theme. Built on top of Bootstrap" and [Core PHP Admin Panel](https://github.com/chetans9/core-php-admin-panel), a simple Admin Panel written in core PHP that contains an implementation of general features you might need in your website admin panel like: record management (CRUD), secure authentication, pagination, filters.
 
-[LIVE DEMO](https://qrcode.giandonatoinverso.dev/)
 
-username: admin
 
-password: admin
+LIVE DEMO CURRENTLY NOT AVAILABLE - Will be added once this fork reaches a "stable" state.
 
-[DOCUMENTATION](https://giandonatoinverso.it/qrcode/documentation)
+~~DOCUMENTATION~~ Not yet updated. Will be added in the future.
 
 # Features
 
@@ -51,15 +52,29 @@ password: admin
 ## What is included
 
 - PHP files
-- .sql file with sample data
+~~- .sql file with sample data~~ Removed in order to use the official MariaDB image used by docker-compose.yml.
 - JS files
 - CSS files
 - Docker compose file
 
 ## Setup with docker compose
-1. download docker-compose.yml file
-2. Start docker stack
+
+### Option A: Run using published Docker image
+1. Download `docker-compose.yml` and `database/init.sql`.
+2. Start the stack (pulls prebuilt image `ghcr.io/filliravaz/php-dynamic-qr-code-ng:latest`):
 ```bash
-docker compose build --no-cache && docker compose up -d
+docker compose up -d
 ```
-3. Open your browser at http://localhost:80 and login with (username: superadmin, password: superadmin)
+
+### Option B: Build and run from source repository
+1. Clone this repository:
+```bash
+git clone https://github.com/filliravaz/PHP-Dynamic-Qr-code-NG.git
+cd PHP-Dynamic-Qr-code-NG
+```
+2. Build and start the stack:
+```bash
+docker compose up -d --build
+```
+
+3. Open your browser at http://localhost:80 and log in with the initial superadmin credential (username: `superadmin`, password: `superadmin`). Change this password immediately. The first user to log in must change it. If an unauthorized user logs in with these credentials before you, wipe the database to reset the first-login state.

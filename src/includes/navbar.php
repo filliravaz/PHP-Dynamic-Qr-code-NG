@@ -23,6 +23,9 @@
           <a href="#" class="dropdown-item">
             <i class="fa fa-cog"></i> Settings
           </a>-->
+          <a href="./change_password.php" class="dropdown-item">
+            <i class="fas fa-key"></i> Change Password
+          </a>
           <div class="dropdown-divider"></div>
           <a href="./logout.php" class="dropdown-item">
             <i class="fas fa-sign-out-alt"></i> Logout

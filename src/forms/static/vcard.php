@@ -1,4 +1,5 @@
 <form class="form" action="static_qrcode.php?type=vcard" method="post" id="static_form" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="<?php echo getCsrfToken(); ?>"/>
     <?php include BASE_PATH.'/forms/qrcode_options.php'; ?>
 <!-- Input forms -->
 <!-- First row -->

@@ -1,9 +1,7 @@
 <?php
 /**
- * Function to generate random string.
+ * Function to generate random string using cryptographically secure random_int.
  * The function takes an integer n as input and generates a string by concatenating n characters chosen randomly from a domain.
-
-N.B. In our case the integer n is randomly chosen between a range of 5 and 8. I chose this "short" range to not overdo the length of the identifier
  */
 function randomString($n) {
 
@@ -15,42 +13,176 @@ function randomString($n) {
 
 	// Loop to create random string
 	for ($i = 0; $i < $n; $i++) {
-		// Generate a random index to pick characters
-		$index = rand(0, $len - 1);
-
-		// Concatenating the character
-		// in resultant string
-		$generated_string = $generated_string . $domain[$index];
+		$index = random_int(0, $len - 1);
+		$generated_string .= $domain[$index];
 	}
 
 	return $generated_string;
 }
 
 /**
- *
+ * Generate cryptographically secure hex token
  */
-function getSecureRandomToken() {
-	$token = bin2hex(openssl_random_pseudo_bytes(16));
-	return $token;
+function getSecureRandomToken($bytes = 16) {
+	return bin2hex(random_bytes($bytes));
+}
+
+/**
+ * Generate CSRF token and store it in session
+ */
+function getCsrfToken() {
+	if (session_status() === PHP_SESSION_NONE) {
+		session_start();
+	}
+	if (empty($_SESSION['csrf_token'])) {
+		$_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+	}
+	return $_SESSION['csrf_token'];
+}
+
+/**
+ * Validate CSRF token from request
+ */
+function validateCsrfToken($token = null) {
+	if (session_status() === PHP_SESSION_NONE) {
+		session_start();
+	}
+	if ($token === null) {
+		$token = $_POST['csrf_token'] ?? '';
+	}
+	if (
+		empty($_SESSION['csrf_token']) ||
+		!is_string($_SESSION['csrf_token']) ||
+		!is_string($token) ||
+		$token === '' ||
+		!hash_equals($_SESSION['csrf_token'], $token)
+	) {
+		return false;
+	}
+	return true;
+}
+
+/**
+ * Determine whether a given IP address matches configured TRUSTED_PROXIES.
+ */
+function isTrustedProxy($ip) {
+	if (empty($ip) || !is_string($ip)) {
+		return false;
+	}
+	$trustedProxies = defined('TRUSTED_PROXIES') ? TRUSTED_PROXIES : getenv('TRUSTED_PROXIES');
+	if (empty($trustedProxies) || !is_string($trustedProxies)) {
+		return false;
+	}
+	$proxyList = array_map('trim', explode(',', $trustedProxies));
+	foreach ($proxyList as $proxy) {
+		if ($proxy === '*' || $proxy === $ip) {
+			return true;
+		}
+		if (strpos($proxy, '/') !== false) {
+			[$subnet, $bits] = explode('/', $proxy, 2);
+			if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) && filter_var($subnet, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+				$ipLong = ip2long($ip);
+				$subnetLong = ip2long($subnet);
+				$mask = -1 << (32 - (int)$bits);
+				if (($ipLong & $mask) === ($subnetLong & $mask)) {
+					return true;
+				}
+			}
+		}
+	}
+	return false;
+}
+
+/**
+ * Retrieve the client IP address.
+ * Trusts X-Forwarded-For only when the direct remote address is trusted,
+ * selecting the first valid non-trusted address while otherwise returning the remote address.
+ */
+function getClientIp() {
+	$remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+	if (!isTrustedProxy($remoteAddr)) {
+		return $remoteAddr;
+	}
+
+	if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+		$forwarded = array_map('trim', explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']));
+		foreach ($forwarded as $ip) {
+			if (filter_var($ip, FILTER_VALIDATE_IP)) {
+				if (!isTrustedProxy($ip)) {
+					return $ip;
+				}
+			}
+		}
+	}
+
+	return $remoteAddr;
+}
+
+/**
+ * Determine whether the current request is over HTTPS.
+ * Derives HTTPS from FORCE_HTTPS or public BASE_URL, direct server detection,
+ * and honors X-Forwarded-Proto only when the request originates from a configured trusted proxy.
+ */
+function isHttpsRequest() {
+	// 1. Force HTTPS configuration
+	if (defined('FORCE_HTTPS') && FORCE_HTTPS) {
+		return true;
+	}
+	$forceHttps = getenv('FORCE_HTTPS');
+	if ($forceHttps !== false && filter_var($forceHttps, FILTER_VALIDATE_BOOLEAN)) {
+		return true;
+	}
+
+	// 2. Derive from public BASE_URL
+	if (defined('BASE_URL') && is_string(BASE_URL) && stripos(BASE_URL, 'https://') === 0) {
+		return true;
+	}
+
+	// 3. Direct server detection
+	if (!empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off') {
+		return true;
+	}
+	if (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443) {
+		return true;
+	}
+
+	// 4. Honor X-Forwarded-Proto only from a configured trusted proxy
+	$remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '';
+	if ($remoteAddr !== '' && isTrustedProxy($remoteAddr) && !empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+		$forwardedProto = strtolower(trim(explode(',', $_SERVER['HTTP_X_FORWARDED_PROTO'])[0]));
+		if ($forwardedProto === 'https') {
+			return true;
+		}
+	}
+
+	return false;
 }
 
 /**
  * Clear Auth Cookie
  */
 function clearAuthCookie() {
-
+	$isSecure = isHttpsRequest();
+	$clearOptions = [
+		'expires' => time() - 3600,
+		'path' => '/',
+		'secure' => $isSecure,
+		'httponly' => true,
+		'samesite' => 'Lax'
+	];
 	unset($_COOKIE['series_id']);
 	unset($_COOKIE['remember_token']);
-	setcookie('series_id', '', -1, '/');
-	setcookie('remember_token', '', -1, '/');
+	setcookie('series_id', '', $clearOptions);
+	setcookie('remember_token', '', $clearOptions);
 }
+
 /**
  *
  */
 function clean_input($data) {
 	$data = trim($data);
 	$data = stripslashes($data);
-	$data = htmlspecialchars($data);
+	$data = htmlspecialchars($data, ENT_QUOTES, 'UTF-8');
 	return $data;
 }
 
@@ -124,9 +256,246 @@ function base_url() {
     } else {
         return sprintf(
             "%s://%s:%s",
-            isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http',
-            $_SERVER['SERVER_NAME'],
-            $_SERVER['SERVER_PORT']
+            isHttpsRequest() ? 'https' : 'http',
+            $_SERVER['SERVER_NAME'] ?? 'localhost',
+            $_SERVER['SERVER_PORT'] ?? '80'
         );
     }
+}
+
+/**
+ * Check rate limit for authentication actions.
+ * Limits by client IP (max 5 per 15 min) and by username (max 5 per 15 min).
+ *
+ * @param string|null $username
+ * @param string $ip
+ * @param int $maxAttempts
+ * @param int $decayMinutes
+ * @return bool True if allowed, false if rate limit exceeded.
+ */
+function checkLoginRateLimit($username, $ip, $maxAttempts = 5, $decayMinutes = 15) {
+    if (function_exists('getDbInstance')) {
+        $db = getDbInstance();
+        $cutoff = date('Y-m-d H:i:s', time() - ($decayMinutes * 60));
+
+        $createTableAndRetry = function() use ($db) {
+            $tableName = DATABASE_PREFIX . 'login_attempts';
+            $db->rawQuery("CREATE TABLE IF NOT EXISTS `{$tableName}` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `ip_address` varchar(45) NOT NULL,
+                `username` varchar(50) NOT NULL,
+                `attempted_at` datetime NOT NULL,
+                PRIMARY KEY (`id`),
+                KEY `idx_ip_time` (`ip_address`, `attempted_at`),
+                KEY `idx_user_time` (`username`, `attempted_at`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        };
+
+        $isTableMissing = function(\Throwable $e, $db) {
+            $msg = strtolower($e->getMessage());
+            $dbErr = strtolower((string)$db->getLastError());
+            return (
+                strpos($msg, "doesn't exist") !== false ||
+                strpos($msg, "unknown table") !== false ||
+                strpos($dbErr, "doesn't exist") !== false ||
+                strpos($dbErr, "unknown table") !== false ||
+                (method_exists($e, 'getCode') && (int)$e->getCode() === 1146)
+            );
+        };
+
+        try {
+            $ipAttempts = null;
+            try {
+                // Count attempts by IP
+                $db->where('ip_address', $ip);
+                $db->where('attempted_at >= ?', [$cutoff]);
+                $ipAttempts = $db->getValue('login_attempts', 'count(*)');
+            } catch (\Throwable $e) {
+                // Catch missing-table exception, create table and retry query
+                if ($isTableMissing($e, $db)) {
+                    $createTableAndRetry();
+                    $db->where('ip_address', $ip);
+                    $db->where('attempted_at >= ?', [$cutoff]);
+                    $ipAttempts = $db->getValue('login_attempts', 'count(*)');
+                } else {
+                    throw $e;
+                }
+            }
+
+            // Retain existing null-result fallback if reachable without throwing
+            if ($ipAttempts === null && strpos(strtolower((string)$db->getLastError()), "doesn't exist") !== false) {
+                $createTableAndRetry();
+                $db->where('ip_address', $ip);
+                $db->where('attempted_at >= ?', [$cutoff]);
+                $ipAttempts = $db->getValue('login_attempts', 'count(*)');
+            }
+
+            if ($ipAttempts !== null && (int)$ipAttempts >= $maxAttempts) {
+                return false;
+            }
+
+            // Count attempts by username
+            if (!empty($username)) {
+                $db->where('username', $username);
+                $db->where('attempted_at >= ?', [$cutoff]);
+                $userAttempts = $db->getValue('login_attempts', 'count(*)');
+                if ($userAttempts !== null && (int)$userAttempts >= $maxAttempts) {
+                    return false;
+                }
+            }
+
+            return true;
+        } catch (\Throwable $e) {
+            error_log('checkLoginRateLimit storage failure: ' . $e->getMessage());
+            // Fail closed whenever persistent storage is unavailable
+            return false;
+        }
+    }
+
+    // Fail closed if database service is unavailable
+    return false;
+}
+
+/**
+ * Record an authentication attempt. Returns true on successful insert, false on failure.
+ *
+ * @param string $username
+ * @param string $ip
+ * @return bool
+ */
+function recordLoginAttempt($username, $ip) {
+    if (!function_exists('getDbInstance')) {
+        return false;
+    }
+
+    try {
+        $db = getDbInstance();
+        if (!$db) {
+            return false;
+        }
+
+        $insertResult = $db->insert('login_attempts', [
+            'ip_address' => $ip,
+            'username' => (string)$username,
+            'attempted_at' => date('Y-m-d H:i:s')
+        ]);
+
+        if ($insertResult === false) {
+            return false;
+        }
+
+        // Periodic cleanup of attempts older than 24 hours
+        try {
+            if (random_int(1, 20) === 1) {
+                $cutoff = date('Y-m-d H:i:s', time() - 86400);
+                $db->where('attempted_at < ?', [$cutoff]);
+                $db->delete('login_attempts');
+            }
+        } catch (\Throwable $cleanupEx) {
+            error_log('recordLoginAttempt cleanup failure: ' . $cleanupEx->getMessage());
+            // Cleanup failure does not change the successful insert result
+        }
+
+        return true;
+    } catch (\Throwable $e) {
+        error_log('recordLoginAttempt storage failure: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Clear recorded attempts on successful authentication.
+ */
+function clearLoginAttempts($username, $ip = null) {
+    if (empty($username) || !is_string($username) || trim($username) === '') {
+        return;
+    }
+
+    if (function_exists('getDbInstance')) {
+        try {
+            $db = getDbInstance();
+            $db->where('username', trim($username));
+            $db->delete('login_attempts');
+        } catch (\Throwable $e) {
+            error_log('clearLoginAttempts storage failure: ' . $e->getMessage());
+        }
+    }
+}
+
+/**
+ * Safely parse and render static QR code display content without brittle regex tag stripping (SEC-09).
+ */
+function renderSafeStaticContent($rawContent) {
+    if ($rawContent === null || $rawContent === '') {
+        return '';
+    }
+
+    // Check if stored as JSON
+    $decoded = json_decode((string)$rawContent, true);
+    if (is_array($decoded)) {
+        $html = '';
+        foreach ($decoded as $key => $val) {
+            $html .= '<strong>' . htmlspecialchars((string)$key, ENT_QUOTES, 'UTF-8') . ':</strong> ' . htmlspecialchars((string)$val, ENT_QUOTES, 'UTF-8') . '<br>';
+        }
+        return $html;
+    }
+
+    if (!class_exists('DOMDocument')) {
+        return htmlspecialchars((string)$rawContent, ENT_QUOTES, 'UTF-8');
+    }
+
+    $dom = new DOMDocument();
+    libxml_use_internal_errors(true);
+    // Wrap in standard root node and load HTML
+    $dom->loadHTML('<?xml encoding="utf-8"?><div>' . (string)$rawContent . '</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+    libxml_clear_errors();
+
+    $allowedTags = ['strong', 'b', 'br', 'div', 'span', 'p'];
+    $allowedClasses = ['row', 'col-sm-4', 'col-sm-6', 'col-sm-12'];
+
+    $cleanNode = function($node, &$cleanNode) use ($allowedTags, $allowedClasses) {
+        if ($node->nodeType === XML_ELEMENT_NODE) {
+            $tagName = strtolower($node->nodeName);
+            if (!in_array($tagName, $allowedTags, true)) {
+                // Replace disallowed elements with their safe text content
+                $textNode = $node->ownerDocument->createTextNode($node->textContent);
+                $node->parentNode->replaceChild($textNode, $node);
+                return;
+            }
+
+            // Strip all attributes, preserving only strictly whitelisted structural class names
+            $class = $node->getAttribute('class');
+            while ($node->attributes->length > 0) {
+                $node->removeAttribute($node->attributes->item(0)->name);
+            }
+            if ($class !== '') {
+                $classParts = array_filter(explode(' ', $class));
+                $safeClasses = array_intersect($classParts, $allowedClasses);
+                if (!empty($safeClasses)) {
+                    $node->setAttribute('class', implode(' ', $safeClasses));
+                }
+            }
+        }
+
+        // Copy child nodes list as node replacement mutates live list
+        $children = [];
+        foreach ($node->childNodes as $child) {
+            $children[] = $child;
+        }
+        foreach ($children as $child) {
+            $cleanNode($child, $cleanNode);
+        }
+    };
+
+    $root = $dom->getElementsByTagName('div')->item(0);
+    if ($root) {
+        $cleanNode($root, $cleanNode);
+        $result = '';
+        foreach ($root->childNodes as $child) {
+            $result .= $dom->saveHTML($child);
+        }
+        return $result;
+    }
+
+    return htmlspecialchars((string)$rawContent, ENT_QUOTES, 'UTF-8');
 }
