@@ -7,6 +7,19 @@ if (empty($_SESSION['user_logged_in']) || empty($_SESSION['user_id'])) {
     exit;
 }
 
+$db = getDbInstance();
+$db->where('id', (int)$_SESSION['user_id']);
+$authUser = $db->getOne('users', ['id', 'session_version']);
+if (!$authUser || (int)($authUser['session_version'] ?? 1) !== (int)($_SESSION['session_version'] ?? 0)) {
+    clearAuthCookie();
+    $_SESSION = [];
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_destroy();
+    }
+    header('Location: login.php');
+    exit;
+}
+
 $errors = [];
 $isFirstLogin = !empty($_SESSION['must_change_password']);
 
@@ -32,18 +45,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors[] = 'New password cannot be the same as your current or default password.';
         } else {
             $newHash = password_hash($new_password, PASSWORD_DEFAULT);
+            $newSessionVersion = (int)($user['session_version'] ?? 1) + 1;
             $db->where('id', (int)$_SESSION['user_id']);
             $updated = $db->update('users', [
                 'password' => $newHash,
                 'must_change_password' => 0,
                 'series_id' => null,
                 'remember_token' => null,
-                'expires' => null
+                'expires' => null,
+                'session_version' => $newSessionVersion
             ]);
 
             if ($updated) {
                 clearAuthCookie();
                 session_regenerate_id(true);
+                $_SESSION['session_version'] = $newSessionVersion;
                 unset($_SESSION['must_change_password']);
                 $_SESSION['success'] = 'Password changed successfully! You may now access the application.';
                 header('Location: index.php');

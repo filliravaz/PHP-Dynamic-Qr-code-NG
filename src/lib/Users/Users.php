@@ -59,6 +59,7 @@ class Users
         $data_to_db["type"] = $input_data["type"];
         // Force newly created users to change their initial password on first login
         $data_to_db["must_change_password"] = 1;
+        $data_to_db["session_version"] = 1;
 
         $db->where('username', $data_to_db['username']);
         $db->get('users');
@@ -101,11 +102,16 @@ class Users
             $isSamePassword = (!empty($currentUser['password']) && password_verify($input_data['password'], $currentUser['password']));
             if (!$isSamePassword) {
                 $data_to_db['password'] = password_hash($input_data['password'], PASSWORD_DEFAULT);
+                $data_to_db['series_id'] = null;
+                $data_to_db['remember_token'] = null;
+                $data_to_db['expires'] = null;
+                $data_to_db['session_version'] = (int)($currentUser['session_version'] ?? 1) + 1;
                 // When an administrator changes another user's password, force password change on next login
                 if (isset($_SESSION['user_id']) && (int)$_SESSION['user_id'] !== (int)$input_data['id']) {
                     $data_to_db["must_change_password"] = 1;
                 } else {
                     $data_to_db["must_change_password"] = 0;
+                    $_SESSION['session_version'] = $data_to_db['session_version'];
                 }
             } else {
                 // Password unchanged: preserve existing flag

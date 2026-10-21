@@ -26,6 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST')
 			$_SESSION['user_logged_in'] = TRUE;
 			$_SESSION['type'] = $row['type'];
 			$_SESSION['user_id'] = (int)$row['id'];
+			$_SESSION['session_version'] = (int)($row['session_version'] ?? 1);
 
 			if ($remember)
             {

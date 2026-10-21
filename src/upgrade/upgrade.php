@@ -267,6 +267,20 @@ if ($mcpCheck->num_rows === 0) {
     }
 }
 
+// Add session_version column to users if not present
+$svCheck = $conn->query("SHOW COLUMNS FROM " . DATABASE_PREFIX . "users LIKE 'session_version'");
+if ($svCheck === false) {
+    abortMigration($conn, "Failed checking session_version column: " . $conn->error, $isCli);
+}
+if ($svCheck->num_rows === 0) {
+    $sql = "ALTER TABLE " . DATABASE_PREFIX . "users ADD `session_version` INT(11) NOT NULL DEFAULT 1 AFTER `must_change_password`";
+    if ($conn->query($sql) === TRUE) {
+        outputMessage("The session_version column has been added to users successfully.", $isCli);
+    } else {
+        abortMigration($conn, "Error adding column session_version: " . $conn->error, $isCli);
+    }
+}
+
 // Add id_owner to dynamic_qrcodes if not present
 $dynCheck = $conn->query("SHOW COLUMNS FROM " . DATABASE_PREFIX . "dynamic_qrcodes LIKE 'id_owner'");
 if ($dynCheck === false) {
