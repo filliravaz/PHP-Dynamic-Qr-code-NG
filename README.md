@@ -77,4 +77,4 @@ cd PHP-Dynamic-Qr-code-NG
 docker compose up -d --build
 ```
 
-3. Open your browser at http://localhost:80 and log in with the initial superadmin credential (username: `superadmin`, password: `superadmin`). Remember to change this password immediately! The first user to log in will be forced to change it. If an unauthorized logs in with these credentials before you, you wipe the database to reset the first login state.
+3. Open your browser at http://localhost:80 and log in with the initial superadmin credential (username: `superadmin`, password: `superadmin`). Change this password immediately. The first user to log in must change it. If an unauthorized user logs in with these credentials before you, wipe the database to reset the first-login state.

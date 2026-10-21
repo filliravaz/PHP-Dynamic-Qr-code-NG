@@ -27,6 +27,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST')
 		exit;
 	}
 
+	// Pre-record login attempt before user lookup; fail closed if recording fails
+	if (!recordLoginAttempt($username, $clientIp)) {
+		usleep(250000);
+		$_SESSION['login_failure'] = 'Unable to process login request. Please try again.';
+		header('Location: login.php');
+		exit;
+	}
+
 	// Get DB instance.
 	$db = getDbInstance();
 
@@ -93,7 +101,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST')
 		}
         else
         {
-			recordLoginAttempt($username, $clientIp);
 			usleep(250000);
 			$_SESSION['login_failure'] = 'Invalid username or password';
 			header('Location: login.php');
@@ -102,7 +109,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST')
 	}
     else
     {
-		recordLoginAttempt($username, $clientIp);
 		usleep(250000);
 		$_SESSION['login_failure'] = 'Invalid username or password';
 		header('Location: login.php');

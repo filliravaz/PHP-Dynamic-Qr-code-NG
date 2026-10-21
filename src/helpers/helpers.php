@@ -357,27 +357,49 @@ function checkLoginRateLimit($username, $ip, $maxAttempts = 5, $decayMinutes = 1
 }
 
 /**
- * Record a failed authentication attempt.
+ * Record an authentication attempt. Returns true on successful insert, false on failure.
+ *
+ * @param string $username
+ * @param string $ip
+ * @return bool
  */
 function recordLoginAttempt($username, $ip) {
-    if (function_exists('getDbInstance')) {
-        try {
-            $db = getDbInstance();
-            $db->insert('login_attempts', [
-                'ip_address' => $ip,
-                'username' => (string)$username,
-                'attempted_at' => date('Y-m-d H:i:s')
-            ]);
+    if (!function_exists('getDbInstance')) {
+        return false;
+    }
 
-            // Periodic cleanup of attempts older than 24 hours
+    try {
+        $db = getDbInstance();
+        if (!$db) {
+            return false;
+        }
+
+        $insertResult = $db->insert('login_attempts', [
+            'ip_address' => $ip,
+            'username' => (string)$username,
+            'attempted_at' => date('Y-m-d H:i:s')
+        ]);
+
+        if ($insertResult === false) {
+            return false;
+        }
+
+        // Periodic cleanup of attempts older than 24 hours
+        try {
             if (random_int(1, 20) === 1) {
                 $cutoff = date('Y-m-d H:i:s', time() - 86400);
                 $db->where('attempted_at < ?', [$cutoff]);
                 $db->delete('login_attempts');
             }
-        } catch (\Throwable $e) {
-            error_log('recordLoginAttempt storage failure: ' . $e->getMessage());
+        } catch (\Throwable $cleanupEx) {
+            error_log('recordLoginAttempt cleanup failure: ' . $cleanupEx->getMessage());
+            // Cleanup failure does not change the successful insert result
         }
+
+        return true;
+    } catch (\Throwable $e) {
+        error_log('recordLoginAttempt storage failure: ' . $e->getMessage());
+        return false;
     }
 }
 
