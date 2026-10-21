@@ -1,5 +1,5 @@
 <?php
-require_once ('../config/environment.php');
+require_once dirname(__DIR__) . '/config/environment.php';
 
 $isCli = (php_sapi_name() === 'cli');
 define('TARGET_VERSION', '2.0.0');
