@@ -62,9 +62,6 @@
                 <td>
                     <?php
                     $raw_content = $row['content'];
-                    if (strpos($raw_content, '&lt;strong&gt;') !== false || strpos($raw_content, '&lt;div') !== false) {
-                        $raw_content = htmlspecialchars_decode($raw_content, ENT_QUOTES);
-                    }
                     $clean_content = preg_replace('/\s+on[a-z]+\s*=\s*("[^"]*"|\'[^\']*\'|[^\s>]+)/i', '', $raw_content);
                     $clean_content = preg_replace('/<(script|iframe|object|embed|style)\b[^>]*>(.*?)<\/\1>/is', '', $clean_content);
                     echo strip_tags($clean_content, ['strong', 'b', 'br', 'div', 'span', 'p']);

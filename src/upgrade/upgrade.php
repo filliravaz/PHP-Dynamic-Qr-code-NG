@@ -155,6 +155,21 @@ if ($statCheck && $statCheck->num_rows === 0) {
     }
 }
 
+// Normalize legacy static_qrcodes content representation
+$staticTable = DATABASE_PREFIX . 'static_qrcodes';
+$legacyRows = $conn->query("SELECT `id`, `content` FROM `{$staticTable}` WHERE `content` LIKE '%&lt;strong&gt;%' OR `content` LIKE '%&lt;div%' OR `content` LIKE '%&lt;b&gt;%'");
+if ($legacyRows && $legacyRows->num_rows > 0) {
+    $upStmt = $conn->prepare("UPDATE `{$staticTable}` SET `content` = ? WHERE `id` = ?");
+    $migrated = 0;
+    while ($r = $legacyRows->fetch_assoc()) {
+        $decoded = htmlspecialchars_decode($r['content'], ENT_QUOTES);
+        $upStmt->bind_param('si', $decoded, $r['id']);
+        $upStmt->execute();
+        $migrated++;
+    }
+    outputMessage("Migrated {$migrated} legacy static QR code content records to standard format.", $isCli);
+}
+
 // 6. Record successful upgrade in schema_version table
 $insertStmt = $conn->prepare("INSERT INTO `{$versionTable}` (`version`, `applied_at`) VALUES (?, NOW()) ON DUPLICATE KEY UPDATE `applied_at` = NOW()");
 $insertStmt->bind_param('s', $targetVer);
