@@ -1,4 +1,4 @@
-FROM php:8.3
+FROM php:8.4
 
 RUN if [ "$(grep '^VERSION_ID=' /etc/os-release | cut -d '=' -f 2 | tr -d '"')" -eq "9" ]; then \
         sed -i -e 's/deb.debian.org/archive.debian.org/g' \
@@ -38,11 +38,13 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update -q \
       exif \
       gd \
       gettext \
+      imagick \
       intl \
       ldap \
       memcached \
       mysqli \
       opcache \
+      pcntl \
       pdo_mysql \
       pdo_pgsql \
       pgsql \
@@ -56,11 +58,6 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update -q \
       5.6.*) PHP_EXTENSIONS="$PHP_EXTENSIONS mcrypt mysql";; \
       7.0.*|7.1.*) PHP_EXTENSIONS="$PHP_EXTENSIONS mcrypt";; \
     esac \
-    # Install Imagick from master on PHP >= 8.3, because imagick 3.7.0 broke on latest PHP releases and Imagick maintainers don't care to tag a newer release
-    && if [ $(php -r 'echo PHP_VERSION_ID;') -lt 80300 ]; then \
-      PHP_EXTENSIONS="$PHP_EXTENSIONS imagick"; \
-      else PHP_EXTENSIONS="$PHP_EXTENSIONS https://api.github.com/repos/Imagick/imagick/tarball/28f27044e435a2b203e32675e942eb8de620ee58"; \
-    fi \
     && install-php-extensions $PHP_EXTENSIONS \
     && if command -v a2enmod; then a2enmod rewrite; fi
 
@@ -77,12 +74,6 @@ RUN cd /opt \
   && php composer-setup.php --install-dir=/usr/local/bin --filename=composer --2 \
   # Remove installer files.
   && rm /opt/composer-setup.php /opt/composer-setup.sha384sum
-
-RUN docker-php-source extract
-RUN docker-php-ext-install pdo_mysql zip exif pcntl gd
-RUN docker-php-ext-install mysqli && docker-php-ext-enable mysqli
-RUN docker-php-ext-install gettext && docker-php-ext-enable gettext
-RUN docker-php-ext-install sockets && docker-php-ext-enable sockets
 
 RUN mkdir -p /opt && chmod 777 /opt
 WORKDIR /opt
