@@ -157,7 +157,7 @@ class Qrcode {
         $oldFile = $this->getSafeFilePath($old_qrcode["filename"], $oldFormat);
         $newFile = $this->getSafeFilePath($data_to_db['filename'], $oldFormat);
 
-        if(!file_exists($newFile) || $data_to_db['filename'] === $this->sanitizeFilename($input_data["old_filename"])){
+        if(!file_exists($newFile) || $newFile === $oldFile){
             $db->where('id', $input_data["id"]);
             $stat = $db->update($this->table, $data_to_db);
             
