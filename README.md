@@ -1,5 +1,5 @@
 # Fork notice
-This repository contains a fork of the original project [giandonatoinverso/php-dynamic-qrcode](https://github.com/giandonatoinverso/php-dynamic-qrcode), which was archived in September 2025. It aims to improve security and functionality. We aim to be backwards compatible, making the new software a drop-in replacement.
+This repository contains a fork of the original project [giandonatoinverso/php-dynamic-qrcode](https://github.com/giandonatoinverso/PHP-Dynamic-Qr-code), which was archived in September 2025. It aims to improve security and functionality. We aim to be backwards compatible, making the new software a drop-in replacement.
 
 ---
 
