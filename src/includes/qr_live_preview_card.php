@@ -16,7 +16,7 @@ $isDynamic = !empty($isDynamicQr) || (isset($_SERVER['PHP_SELF']) && basename($_
         <?php if ($isDynamic): ?>
         <div class="alert alert-warning py-2 px-3 text-left small mb-3 border-0" style="font-size: 11.5px; border-left: 4px solid #ffc107 !important; background-color: rgba(255, 193, 7, 0.15);">
             <i class="fas fa-exclamation-triangle mr-1 text-warning"></i>
-            <strong>Disclaimer:</strong> This QR code may differ from the finished (the final generated QR code will encode an auto-generated slug to the integrated shortener).
+            <strong>Disclaimer:</strong> This preview may differ from the final QR code (the final code encodes an auto-generated slug for the integrated shortener).
         </div>
         <?php endif; ?>
 

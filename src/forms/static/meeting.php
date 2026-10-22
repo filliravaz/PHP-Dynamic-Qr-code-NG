@@ -16,8 +16,8 @@
             </div>
             <div class="col-12 col-md-4">
                 <div class="form-group">
-                    <label>Meeting ID / Apple ID / Phone *</label>
-                    <input type="text" name="meeting_id" class="form-control" placeholder="123 456 7890 or user@apple.com" required="required">
+                    <label>Meeting ID / Apple ID / Phone</label>
+                    <input type="text" name="meeting_id" class="form-control" placeholder="123 456 7890 or user@apple.com">
                 </div>
             </div>
             <div class="col-12 col-md-3">

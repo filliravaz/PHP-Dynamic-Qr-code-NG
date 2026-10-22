@@ -165,7 +165,7 @@ class Qrcode {
             if ($file['error'] === UPLOAD_ERR_OK && $file['size'] > 0 && $file['size'] <= 5 * 1024 * 1024) {
                 $finfo = new finfo(FILEINFO_MIME_TYPE);
                 $mime = $finfo->file($file['tmp_name']);
-                $allowed = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp'];
+                $allowed = ['image/png', 'image/jpeg', 'image/webp'];
                 if (in_array($mime, $allowed, true)) {
                     $logosDir = SAVED_QRCODE_DIRECTORY . 'logos/';
                     if (!is_dir($logosDir)) {
@@ -174,7 +174,6 @@ class Qrcode {
                     $ext = match ($mime) {
                         'image/png'     => 'png',
                         'image/jpeg'    => 'jpg',
-                        'image/svg+xml' => 'svg',
                         'image/webp'    => 'webp',
                         default         => 'png'
                     };
@@ -281,7 +280,7 @@ class Qrcode {
         $N = 25;
         if ($foundDark && $maxX > $minX && $maxY > $minY) {
             $qrW = $maxX - $minX + 1;
-            $checkY = min($maxY, $minY + 2);
+            $checkY = $minY;
             $eyeRun = 0;
             for ($x = $minX; $x <= $maxX; $x++) {
                 $r = (imagecolorat($im, $x, $checkY) >> 16) & 0xFF;
@@ -291,10 +290,8 @@ class Qrcode {
                     break;
                 }
             }
-            if ($eyeRun >= 7) {
+            if ($eyeRun > 0) {
                 $moduleSize = $eyeRun / 7.0;
-            } else {
-                $moduleSize = max(2.0, $qrW / 25.0);
             }
             $N = max(21, (int)round($qrW / $moduleSize));
         }
@@ -703,21 +700,7 @@ class Qrcode {
                 $this->failure("Error generating QR code: " . $e->getMessage());
             }
         } else {
-            // Fallback to external service if vendor package is absent
-            $queryParams = [
-                'data'    => $payload,
-                'size'    => $options['size'] . 'x' . $options['size'],
-                'ecc'     => $eccLevelChoice,
-                'color'   => $options['foreground'],
-                'bgcolor' => $options['background'],
-                'format'  => $fileExt
-            ];
-            $url = 'https://api.qrserver.com/v1/create-qr-code/?' . http_build_query($queryParams);
-            $content = @file_get_contents($url);
-            if ($content === false) {
-                $this->failure("Failed to generate QR code.");
-            }
-            @file_put_contents($filename, $content);
+            $this->failure("QR generator dependency is unavailable.");
         }
 
         $db = getDbInstance();

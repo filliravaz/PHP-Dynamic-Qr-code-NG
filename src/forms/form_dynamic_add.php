@@ -17,7 +17,7 @@
                 <div class="form-group">
                     <label for="identifier">Redirect Identifier</label>
                     <input type="text" class="form-control" placeholder="Auto-generated unique slug" disabled>
-                    <small class="form-text text-muted">A random redirect slug is assigned automatically upon creation. <em>Disclaimer: This QR code may differ from the finished.</em></small>
+                    <small class="form-text text-muted">A random redirect slug is assigned automatically upon creation. <em>Disclaimer: This preview may differ from the final QR code (the final code encodes an auto-generated slug for the integrated shortener).</em></small>
                 </div>
             </div>
         </div>

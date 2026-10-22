@@ -443,6 +443,22 @@ class StaticQrcode {
     }
 
     /**
+     * Validates that a string is a valid HTTP or HTTPS URL with a non-empty host.
+     */
+    private function isValidHttpUrl(string $url): bool
+    {
+        if (!filter_var($url, FILTER_VALIDATE_URL)) {
+            return false;
+        }
+        $parts = parse_url($url);
+        if (!is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
+            return false;
+        }
+        $scheme = strtolower($parts['scheme']);
+        return ($scheme === 'http' || $scheme === 'https') && !empty(trim($parts['host']));
+    }
+
+    /**
      * create a qr code of type "social" (YouTube, Instagram, LinkedIn, X, TikTok)
      */
     public function socialQrcode($platform, $username, $custom_url = '')
@@ -453,6 +469,10 @@ class StaticQrcode {
 
         $url = '';
         if (!empty($custom_url)) {
+            if (!$this->isValidHttpUrl($custom_url)) {
+                $this->requiredFieldsError();
+                return;
+            }
             $url = $custom_url;
         } else if (!empty($username)) {
             $cleanUser = ltrim($username, '@');
@@ -505,7 +525,13 @@ class StaticQrcode {
                 case 'eth':
                     $data = 'ethereum:' . $address;
                     $params = [];
-                    if (!empty($amount)) $params['value'] = $amount;
+                    if (!empty($amount)) {
+                        $cleanAmount = str_replace(',', '.', $amount);
+                        if (preg_match('/^(?:0|[1-9]\d*)(?:\.\d+)?$/', $cleanAmount) && (float)$cleanAmount > 0) {
+                            $cleanAmount = rtrim(rtrim($cleanAmount, '0'), '.');
+                            $params['value'] = $cleanAmount . 'e18';
+                        }
+                    }
                     if (!empty($message)) $params['message'] = $message;
                     if (!empty($params)) $data .= '?' . http_build_query($params);
                     break;
@@ -549,6 +575,69 @@ class StaticQrcode {
     }
 
     /**
+     * Validates an IBAN against ISO 13616 country formats and mod-97 checksum.
+     */
+    private function isValidIban(string $iban): bool
+    {
+        $iban = strtoupper(str_replace(' ', '', $iban));
+        if (!preg_match('/^[A-Z]{2}[0-9]{2}[A-Z0-9]+$/', $iban)) {
+            return false;
+        }
+
+        $country = substr($iban, 0, 2);
+        static $ibanLengths = [
+            'AL' => 28, 'AD' => 24, 'AT' => 20, 'AZ' => 28, 'BH' => 22,
+            'BY' => 28, 'BE' => 16, 'BA' => 20, 'BR' => 29, 'BG' => 22,
+            'CR' => 22, 'HR' => 21, 'CY' => 28, 'CZ' => 24, 'DK' => 18,
+            'DO' => 28, 'EE' => 20, 'FO' => 18, 'FI' => 18, 'FR' => 27,
+            'GE' => 22, 'DE' => 22, 'GI' => 23, 'GR' => 27, 'GL' => 18,
+            'GT' => 28, 'HU' => 28, 'IS' => 26, 'IE' => 22, 'IL' => 23,
+            'IT' => 27, 'JO' => 30, 'KZ' => 20, 'XK' => 20, 'KW' => 30,
+            'LV' => 21, 'LB' => 28, 'LI' => 21, 'LT' => 20, 'LU' => 20,
+            'MK' => 19, 'MT' => 31, 'MR' => 27, 'MU' => 30, 'MD' => 24,
+            'MC' => 27, 'ME' => 22, 'NL' => 18, 'NO' => 15, 'PK' => 24,
+            'PS' => 29, 'PL' => 28, 'PT' => 25, 'QA' => 29, 'RO' => 24,
+            'LC' => 32, 'SM' => 27, 'ST' => 25, 'SA' => 24, 'RS' => 22,
+            'SC' => 31, 'SK' => 24, 'SI' => 19, 'ES' => 24, 'SE' => 24,
+            'CH' => 21, 'TL' => 23, 'TN' => 24, 'TR' => 26, 'UA' => 29,
+            'AE' => 23, 'GB' => 22, 'VA' => 22, 'VG' => 24,
+            'AO' => 25, 'BF' => 28, 'BI' => 27, 'BJ' => 28, 'CF' => 27,
+            'CG' => 27, 'CI' => 28, 'CM' => 27, 'CV' => 25, 'DJ' => 27,
+            'DZ' => 26, 'EG' => 29, 'FK' => 18, 'GA' => 27, 'GQ' => 27,
+            'GW' => 25, 'HN' => 28, 'IQ' => 23, 'IR' => 26, 'KM' => 27,
+            'LY' => 25, 'MA' => 28, 'MG' => 27, 'ML' => 28, 'MN' => 20,
+            'MZ' => 25, 'NE' => 28, 'NI' => 32, 'OM' => 23, 'RU' => 33,
+            'SD' => 18, 'SN' => 28, 'SO' => 23, 'SV' => 28, 'TD' => 27,
+            'TG' => 28
+        ];
+
+        if (!isset($ibanLengths[$country]) || strlen($iban) !== $ibanLengths[$country]) {
+            return false;
+        }
+
+        $rearranged = substr($iban, 4) . substr($iban, 0, 4);
+        $numeric = '';
+        $len = strlen($rearranged);
+        for ($i = 0; $i < $len; $i++) {
+            $char = $rearranged[$i];
+            if (ctype_alpha($char)) {
+                $numeric .= (ord($char) - 55);
+            } else {
+                $numeric .= $char;
+            }
+        }
+
+        $remainder = 0;
+        $numLen = strlen($numeric);
+        for ($i = 0; $i < $numLen; $i += 7) {
+            $chunk = $remainder . substr($numeric, $i, 7);
+            $remainder = (int)$chunk % 97;
+        }
+
+        return $remainder === 1;
+    }
+
+    /**
      * create a qr code of type "sepa" (EPC standard)
      */
     public function sepaQrcode($name, $iban, $bic = '', $amount = '', $remittance = '')
@@ -560,6 +649,9 @@ class StaticQrcode {
         $remittance = trim($remittance);
 
         if (!empty($name) && !empty($iban)) {
+            if (!$this->isValidIban($iban)) {
+                $this->failure('Invalid IBAN provided.');
+            }
             $formattedAmount = '';
             if (!empty($amount)) {
                 $num = number_format((float)str_replace(',', '.', $amount), 2, '.', '');
@@ -628,6 +720,26 @@ class StaticQrcode {
     }
 
     /**
+     * Transliterates a string to ASCII characters.
+     */
+    private function transliterateToAscii(string $text): string
+    {
+        if (function_exists('transliterator_transliterate')) {
+            $transliterated = transliterator_transliterate('Any-Latin; Latin-ASCII;', $text);
+            if ($transliterated !== false) {
+                return $transliterated;
+            }
+        }
+        if (function_exists('iconv')) {
+            $transliterated = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $text);
+            if ($transliterated !== false) {
+                return $transliterated;
+            }
+        }
+        return $text;
+    }
+
+    /**
      * create a qr code of type "pix" (Brazilian Instant Payments EMV standard)
      */
     public function pixQrcode($pix_key, $merchant_name, $merchant_city, $amount = '', $txid = '')
@@ -652,15 +764,30 @@ class StaticQrcode {
                 $payload .= $this->emvTlv('54', number_format((float)str_replace(',', '.', $amount), 2, '.', ''));
             }
 
-            $cleanName = mb_substr(preg_replace('/[^A-Za-z0-9 ]/', '', $merchant_name), 0, 25);
-            $cleanCity = mb_substr(preg_replace('/[^A-Za-z0-9 ]/', '', $merchant_city), 0, 15);
+            $cleanName = mb_substr(preg_replace('/[^A-Za-z0-9 ]/', '', $this->transliterateToAscii($merchant_name)), 0, 25);
+            $cleanName = trim($cleanName);
+            if ($cleanName === '') {
+                $cleanName = 'NA';
+            }
+            $cleanCity = mb_substr(preg_replace('/[^A-Za-z0-9 ]/', '', $this->transliterateToAscii($merchant_city)), 0, 15);
+            $cleanCity = trim($cleanCity);
+            if ($cleanCity === '') {
+                $cleanCity = 'NA';
+            }
 
             $payload .= $this->emvTlv('58', 'BR') .                    // Country Code
                         $this->emvTlv('59', $cleanName) .              // Merchant Name
                         $this->emvTlv('60', $cleanCity);               // Merchant City
 
             // Additional Data Field (txid)
-            $payload .= $this->emvTlv('62', $this->emvTlv('05', $txid));
+            if ($txid === '' || $txid === '***') {
+                $cleanTxid = '***';
+            } else {
+                $sanitizedTxid = mb_substr(preg_replace('/[^A-Za-z0-9]/', '', $this->transliterateToAscii($txid)), 0, 25);
+                $cleanTxid = ($sanitizedTxid !== '') ? $sanitizedTxid : '***';
+            }
+
+            $payload .= $this->emvTlv('62', $this->emvTlv('05', $cleanTxid));
 
             // Append CRC placeholder then compute checksum
             $payloadWithoutCrc = $payload . '6304';
@@ -674,8 +801,8 @@ class StaticQrcode {
             if (!empty($amount)) {
                 $this->sContent .= '<br><strong>Amount:</strong> R$ ' . htmlspecialchars($amount, ENT_QUOTES, 'UTF-8');
             }
-            if ($txid !== '***') {
-                $this->sContent .= '<br><strong>TxID:</strong> ' . htmlspecialchars($txid, ENT_QUOTES, 'UTF-8');
+            if ($cleanTxid !== '***') {
+                $this->sContent .= '<br><strong>TxID:</strong> ' . htmlspecialchars($cleanTxid, ENT_QUOTES, 'UTF-8');
             }
 
             $this->addQrcode("pix");
@@ -694,8 +821,17 @@ class StaticQrcode {
         $password = trim($password);
         $url = trim($url);
 
+        if (empty($meeting_id) && empty($url)) {
+            $this->requiredFieldsError();
+            return;
+        }
+
         $targetUrl = '';
         if (!empty($url)) {
+            if (!$this->isValidHttpUrl($url)) {
+                $this->requiredFieldsError();
+                return;
+            }
             $targetUrl = $url;
         } else if ($platform === 'zoom' && !empty($meeting_id)) {
             $targetUrl = 'https://zoom.us/j/' . preg_replace('/[^0-9]/', '', $meeting_id);
@@ -725,13 +861,23 @@ class StaticQrcode {
     {
         $name = trim($name);
         if (!empty($name)) {
-            $fields = ['N:' . $name];
-            if (!empty($reading)) $fields[] = 'SOUND:' . trim($reading);
-            if (!empty($tel))     $fields[] = 'TEL:' . trim($tel);
-            if (!empty($email))   $fields[] = 'EMAIL:' . trim($email);
-            if (!empty($memo))    $fields[] = 'NOTE:' . trim($memo);
-            if (!empty($address)) $fields[] = 'ADR:' . trim($address);
-            if (!empty($url))     $fields[] = 'URL:' . trim($url);
+            $escapeMecard = function(string $value, bool $escapeComma = true): string {
+                $value = str_replace('\\', '\\\\', $value);
+                $value = str_replace(';', '\;', $value);
+                $value = str_replace(':', '\:', $value);
+                if ($escapeComma) {
+                    $value = str_replace(',', '\,', $value);
+                }
+                return $value;
+            };
+
+            $fields = ['N:' . $escapeMecard($name, false)];
+            if (!empty($reading)) $fields[] = 'SOUND:' . $escapeMecard(trim($reading));
+            if (!empty($tel))     $fields[] = 'TEL:' . $escapeMecard(trim($tel));
+            if (!empty($email))   $fields[] = 'EMAIL:' . $escapeMecard(trim($email));
+            if (!empty($memo))    $fields[] = 'NOTE:' . $escapeMecard(trim($memo));
+            if (!empty($address)) $fields[] = 'ADR:' . $escapeMecard(trim($address));
+            if (!empty($url))     $fields[] = 'URL:' . $escapeMecard(trim($url));
 
             $this->sData = 'MECARD:' . implode(';', $fields) . ';;';
             $this->sContent = '<strong>MeCard Contact:</strong> ' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8');
