@@ -527,10 +527,13 @@ class StaticQrcode {
                     $params = [];
                     if (!empty($amount)) {
                         $cleanAmount = str_replace(',', '.', $amount);
-                        if (preg_match('/^(?:0|[1-9]\d*)(?:\.\d+)?$/', $cleanAmount) && (float)$cleanAmount > 0) {
-                            $cleanAmount = rtrim(rtrim($cleanAmount, '0'), '.');
-                            $params['value'] = $cleanAmount . 'e18';
+                        if (!preg_match('/^(?:0|[1-9]\d*)(?:\.\d+)?$/', $cleanAmount) || (float)$cleanAmount <= 0) {
+                            $this->failure('Invalid amount provided.');
                         }
+                        if (strpos($cleanAmount, '.') !== false) {
+                            $cleanAmount = rtrim(rtrim($cleanAmount, '0'), '.');
+                        }
+                        $params['value'] = $cleanAmount . 'e18';
                     }
                     if (!empty($message)) $params['message'] = $message;
                     if (!empty($params)) $data .= '?' . http_build_query($params);
