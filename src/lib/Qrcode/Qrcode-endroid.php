@@ -609,7 +609,7 @@ class Qrcode {
                     if (in_array($options['roundBlock'], ['shrink', 'dots', 'rounded'], true)) {
                         $writerOptions['compact'] = false;
                     }
-                    $result = !empty($writerOptions) ? $writer->write($qrCode, $logo, null, $writerOptions) : $writer->write($qrCode, $logo);
+                    $result = !empty($writerOptions) ? $writer->write($qrCode, $logo, options: $writerOptions) : $writer->write($qrCode, $logo);
                     $svgContent = $result->getString();
 
                     if ($options['gradientType'] !== 'none') {
@@ -643,9 +643,9 @@ class Qrcode {
                     }
 
                     if (in_array($options['roundBlock'], ['shrink', 'dots'], true)) {
-                        $svgContent = preg_replace('/(<rect\b(?![^>]*\brx=)[^>]*\bid=["\']?block["\']?[^>]*)(>)/i', '$1 rx="40%" ry="40%"$2', $svgContent);
+                        $svgContent = preg_replace('/(<rect\b(?![^>]*\brx=)[^>]*\bid=["\']?block["\']?[^\/>]*)(\/?>)/i', '$1 rx="40%" ry="40%"$2', $svgContent);
                     } elseif ($options['roundBlock'] === 'rounded') {
-                        $svgContent = preg_replace('/(<rect\b(?![^>]*\brx=)[^>]*\bid=["\']?block["\']?[^>]*)(>)/i', '$1 rx="25%" ry="25%"$2', $svgContent);
+                        $svgContent = preg_replace('/(<rect\b(?![^>]*\brx=)[^>]*\bid=["\']?block["\']?[^\/>]*)(\/?>)/i', '$1 rx="25%" ry="25%"$2', $svgContent);
                     }
 
                     if ($options['logoShape'] === 'circle') {
