@@ -22,6 +22,7 @@ if (file_exists(__DIR__ . '/../../vendor/autoload.php')) {
 class Qrcode {
     private string $table;
     private string $redirect_url;
+    private ?string $uploadedLogoPath = null;
 
     public function __construct(string $type) {
         if ($type === "static") {
@@ -37,6 +38,7 @@ class Qrcode {
     }
 
     public function __destruct() {
+        $this->cleanupUploadedLogo();
     }
 
     public function sanitizeFilename(string $filename): string {
@@ -180,6 +182,7 @@ class Qrcode {
                     $targetName = 'logo_' . bin2hex(random_bytes(8)) . '.' . $ext;
                     $targetPath = $logosDir . $targetName;
                     if (move_uploaded_file($file['tmp_name'], $targetPath)) {
+                        $this->uploadedLogoPath = $targetPath;
                         return $targetPath;
                     }
                 }
@@ -551,6 +554,8 @@ class Qrcode {
 
         $logoPath = $this->resolveLogoPath();
 
+        try {
+
         // When a center logo is used, elevate ECC level to High or Quartile to ensure scanability
         $eccLevelChoice = $options['errorCorrectionLevel'];
         if ($logoPath !== null) {
@@ -721,6 +726,9 @@ class Qrcode {
             }
             $this->failure('Insert failed: ' . $db->getLastError());
         }
+        } finally {
+            $this->cleanupUploadedLogo();
+        }
     }
 
     public function editQrcode(array $input_data, array $data_to_db): void {
@@ -804,13 +812,22 @@ class Qrcode {
         }
     }
 
+    private function cleanupUploadedLogo(): void {
+        if ($this->uploadedLogoPath !== null && file_exists($this->uploadedLogoPath)) {
+            @unlink($this->uploadedLogoPath);
+            $this->uploadedLogoPath = null;
+        }
+    }
+
     private function failure(string $message): void {
+        $this->cleanupUploadedLogo();
         $_SESSION['failure'] = $message;
         header('Location: ' . $this->redirect_url);
         exit();
     }
 
     private function success(string $message): void {
+        $this->cleanupUploadedLogo();
         $_SESSION['success'] = $message;
         header('Location: ' . $this->redirect_url);
         exit();
