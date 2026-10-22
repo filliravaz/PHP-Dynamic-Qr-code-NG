@@ -82,3 +82,44 @@
     width: 20px;
     text-align: center;
 }
+
+/* Preset emblem logo buttons */
+.btn-preset-logo {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 20px;
+    padding: 3px 10px;
+    font-size: 12px;
+    transition: all 0.15s ease-in-out;
+}
+
+.btn-preset-logo img {
+    vertical-align: middle;
+}
+
+.btn-preset-logo.active {
+    background-color: #007bff !important;
+    border-color: #007bff !important;
+    color: #ffffff !important;
+}
+
+/* Dark mode adjustment for live QR preview */
+.dark-mode .qr-preview-container {
+    background: repeating-conic-gradient(#2d3238 0% 25%, #23272b 0% 50%) 50% / 20px 20px !important;
+    border-color: #4b545c !important;
+}
+
+.dark-mode .preview-details {
+    color: #adb5bd !important;
+}
+
+.dark-mode .preview-details strong,
+.dark-mode #preview-fg-hex,
+.dark-mode #preview-bg-hex {
+    color: #f8f9fa !important;
+}
+
+.dark-mode #preview-data-label {
+    background-color: #343a40 !important;
+    color: #e9ecef !important;
+}

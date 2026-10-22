@@ -78,6 +78,30 @@ if($_SERVER["REQUEST_METHOD"] === "POST") {
 
             case '2fa':      $static_qrcode_instance->twofaQrcode($_POST['algorithms'], $_POST['secret'], rawurlencode($_POST['label']), rawurlencode($_POST['issuer']));
                 break;
+
+            case 'telegram':     $static_qrcode_instance->telegramQrcode($_POST['username'] ?? '', $_POST['message'] ?? '');
+                break;
+
+            case 'social':       $static_qrcode_instance->socialQrcode($_POST['platform'] ?? '', $_POST['username'] ?? '', $_POST['custom_url'] ?? '');
+                break;
+
+            case 'crypto':       $static_qrcode_instance->cryptoQrcode($_POST['currency'] ?? '', $_POST['address'] ?? '', $_POST['amount'] ?? '', $_POST['message'] ?? '');
+                break;
+
+            case 'sepa':         $static_qrcode_instance->sepaQrcode($_POST['name'] ?? '', $_POST['iban'] ?? '', $_POST['bic'] ?? '', $_POST['amount'] ?? '', $_POST['remittance'] ?? '');
+                break;
+
+            case 'pix':          $static_qrcode_instance->pixQrcode($_POST['pix_key'] ?? '', $_POST['merchant_name'] ?? '', $_POST['merchant_city'] ?? '', $_POST['amount'] ?? '', $_POST['txid'] ?? '');
+                break;
+
+            case 'meeting':      $static_qrcode_instance->meetingQrcode($_POST['platform'] ?? '', $_POST['meeting_id'] ?? '', $_POST['password'] ?? '', $_POST['url'] ?? '');
+                break;
+
+            case 'mecard':       $static_qrcode_instance->mecardQrcode($_POST['name'] ?? '', $_POST['reading'] ?? '', $_POST['tel'] ?? '', $_POST['email'] ?? '', $_POST['memo'] ?? '', $_POST['address'] ?? '', $_POST['url'] ?? '');
+                break;
+
+            case 'medical':      $static_qrcode_instance->medicalQrcode($_POST['name'] ?? '', $_POST['blood_type'] ?? '', $_POST['allergies'] ?? '', $_POST['medications'] ?? '', $_POST['emergency_contact'] ?? '', $_POST['notes'] ?? '');
+                break;
         }
     }
 }
@@ -120,24 +144,33 @@ if($_SERVER["REQUEST_METHOD"] === "POST") {
     <!-- Main content -->
     <section class="content">
         <div class="container-fluid">
-            <div class="card card-primary">
-                <div class="card-header">
-                    <h3 class="card-title">Enter the requested data</h3>
-                </div>
-                <?php if($edit) {?>
-                    <form class="form" action="" method="post" id="static_form" enctype="multipart/form-data">
-                        <div class="card-body">
-                            <?php include BASE_PATH . '/forms/form_static_edit.php';?>
+            <div class="row">
+                <div class="<?php echo $edit ? 'col-12' : 'col-xl-8 col-lg-7'; ?>">
+                    <div class="card card-primary card-outline">
+                        <div class="card-header">
+                            <h3 class="card-title font-weight-bold"><i class="fas fa-qrcode mr-2"></i><?php echo ($edit) ? "Edit Static QR Code" : "Static QR Code Generator"; ?></h3>
                         </div>
-                        <div class="card-footer">
-                            <button type="submit" class="btn btn-primary">Submit</button>
-                        </div>
-                    </form>
-                <?php } else { ?>
-                    <div class="card-body">
-                        <?php include BASE_PATH . '/forms/form_static_add.php'; ?>
+                        <?php if($edit) {?>
+                            <form class="form" action="" method="post" id="static_form" enctype="multipart/form-data">
+                                <div class="card-body">
+                                    <?php include BASE_PATH . '/forms/form_static_edit.php';?>
+                                </div>
+                                <div class="card-footer">
+                                    <button type="submit" class="btn btn-primary"><i class="fas fa-check mr-1"></i> Submit</button>
+                                </div>
+                            </form>
+                        <?php } else { ?>
+                            <div class="card-body p-2 p-md-3">
+                                <?php include BASE_PATH . '/forms/form_static_add.php'; ?>
+                            </div>
+                        <?php } ?>
                     </div>
-                <?php } ?>
+                </div>
+                <?php if (!$edit): ?>
+                <div class="col-xl-4 col-lg-5">
+                    <?php include BASE_PATH . '/includes/qr_live_preview_card.php'; ?>
+                </div>
+                <?php endif; ?>
             </div>
         </div><!--/. container-fluid -->
     </section><!-- /.content -->
@@ -145,6 +178,7 @@ if($_SERVER["REQUEST_METHOD"] === "POST") {
 
 <!-- Footer and scripts -->
 <?php include './includes/footer.php'; ?>
+<script src="dist/js/qr-preview.js?v=<?php echo time(); ?>"></script>
 
 <!-- Page script -->
 <script type="text/javascript">
@@ -168,7 +202,7 @@ $(document).ready(function(){
             $('.my-colorpicker2').colorpicker()
 
             $('.my-colorpicker2').on('colorpickerChange', function(event) {
-                $('.my-colorpicker2 .fa-square').css('color', event.color.toString());
+                $(this).find('.fa-square').css('color', event.color.toString());
             });
 
             $('#start').daterangepicker({

@@ -103,6 +103,7 @@ $mimes = [
     'jpeg' => 'image/jpeg',
     'gif'  => 'image/gif',
     'svg'  => 'image/svg+xml',
+    'webp' => 'image/webp',
     'eps'  => 'application/postscript'
 ];
 $mime = $mimes[$ext] ?? 'application/octet-stream';
