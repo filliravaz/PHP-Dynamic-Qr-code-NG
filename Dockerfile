@@ -81,6 +81,16 @@ COPY composer.json ./
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 COPY ./src ./
 
+ARG APP_CHANNEL="LTS"
+ARG APP_VERSION="2.3.0"
+ARG APP_COMMIT=""
+
+ENV APP_CHANNEL=${APP_CHANNEL} \
+    APP_VERSION=${APP_VERSION} \
+    APP_COMMIT=${APP_COMMIT}
+
+RUN printf '{"channel":"%s","version":"%s","commit":"%s"}\n' "$APP_CHANNEL" "$APP_VERSION" "$APP_COMMIT" > /var/www/html/version.json
+
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html
 

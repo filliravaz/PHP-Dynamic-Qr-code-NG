@@ -1,3 +1,12 @@
+<?php
+$appVersionInfo = function_exists('getAppVersionInfo') ? getAppVersionInfo() : [
+    'is_nightly' => false,
+    'channel'    => 'LTS',
+    'version'    => '2.3.0',
+    'commit'     => '',
+    'tag'        => '2.3.0',
+];
+?>
 <!-- Control Sidebar -->
   <aside class="control-sidebar control-sidebar-dark">
     <!-- Control sidebar content goes here -->
@@ -6,9 +15,13 @@
 
   <!-- Main Footer -->
   <footer class="main-footer text-sm">
-    <strong><a href="https://github.com/giandonatoinverso/PHP-Dynamic-Qr-code" target="_blank">PHP Qrcode Generator</a> by </strong> Giandonato Inverso
+    <strong><a href="https://github.com/filliravaz/PHP-Dynamic-Qr-code-NG" target="_blank">PHP-Dynamic-Qr-code-NG</a></strong> • Maintained by Filippo Ravazzini (originally by Giandonato Inverso)
     <div class="float-right d-none d-sm-inline-block">
-      <b>Version</b> 2.3.0
+      <?php if (!empty($appVersionInfo['is_nightly'])): ?>
+        <span class="badge badge-warning text-dark mr-1">Nightly</span> <b>Build</b> <?php if (!empty($appVersionInfo['commit'])): ?><a href="https://github.com/filliravaz/PHP-Dynamic-Qr-code-NG/commit/<?php echo urlencode($appVersionInfo['commit']); ?>" target="_blank" class="text-reset font-weight-bold"><?php echo htmlspecialchars($appVersionInfo['commit']); ?></a><?php else: ?>nightly<?php endif; ?>
+      <?php else: ?>
+        <b>Version</b> <?php echo htmlspecialchars($appVersionInfo['version']); ?>
+      <?php endif; ?>
     </div>
   </footer>
 </div>
@@ -20,7 +33,7 @@
 <!-- Bootstrap -->
 <script src="plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
 <!-- AdminLTE App -->
-<script src="dist/js/adminlte.js"></script>
+<script src="dist/js/adminlte.min.js"></script>
 <!-- AdminLTE Custom-->
 <script src="dist/js/custom.js?nocache=<?php print rand();?>"></script>
 <!-- Color picker -->

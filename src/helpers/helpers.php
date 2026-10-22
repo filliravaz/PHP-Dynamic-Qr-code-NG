@@ -499,3 +499,116 @@ function renderSafeStaticContent($rawContent) {
 
     return htmlspecialchars((string)$rawContent, ENT_QUOTES, 'UTF-8');
 }
+
+/**
+ * Retrieve dynamic application version and release channel information.
+ *
+ * Channel detection hierarchy:
+ * 1. Environment variables: APP_CHANNEL, APP_VERSION, APP_COMMIT
+ * 2. version.json file located in BASE_PATH
+ * 3. Git metadata inspection if .git repository exists
+ * 4. Fallback defaults: LTS / 2.3.0
+ *
+ * @return array{channel: string, is_nightly: bool, version: string, commit: string, tag: string}
+ */
+function getAppVersionInfo(): array {
+    static $cached = null;
+    if ($cached !== null) {
+        return $cached;
+    }
+
+    $channel = getenv('APP_CHANNEL') ?: '';
+    $version = getenv('APP_VERSION') ?: '';
+    $commit  = getenv('APP_COMMIT') ?: '';
+
+    // 1. Try reading from version.json if available
+    $basePath = defined('BASE_PATH') ? BASE_PATH : dirname(__DIR__);
+    $versionFile = $basePath . '/version.json';
+    if (file_exists($versionFile)) {
+        $json = @json_decode(file_get_contents($versionFile), true);
+        if (is_array($json)) {
+            if ($channel === '' && !empty($json['channel'])) {
+                $channel = (string)$json['channel'];
+            }
+            if ($version === '' && !empty($json['version'])) {
+                $version = (string)$json['version'];
+            }
+            if ($commit === '' && !empty($json['commit'])) {
+                $commit = (string)$json['commit'];
+            }
+        }
+    }
+
+    // 2. Git inspection fallback when running in a live development git working tree
+    if (($commit === '' || $channel === '' || $version === '') && is_dir($basePath . '/../.git')) {
+        $repoRoot = realpath($basePath . '/..');
+        if ($repoRoot) {
+            // Check if current HEAD matches an exact release tag
+            if ($version === '' || $channel === '') {
+                $tagOutput = @shell_exec('git -C ' . escapeshellarg($repoRoot) . ' describe --tags --exact-match 2>/dev/null');
+                if (is_string($tagOutput) && trim($tagOutput) !== '') {
+                    if ($version === '') {
+                        $version = ltrim(trim($tagOutput), 'v');
+                    }
+                    if ($channel === '') {
+                        $channel = 'LTS';
+                    }
+                }
+            }
+
+            // Get current short commit
+            if ($commit === '') {
+                $commitOutput = @shell_exec('git -C ' . escapeshellarg($repoRoot) . ' rev-parse --short HEAD 2>/dev/null');
+                if (is_string($commitOutput) && trim($commitOutput) !== '') {
+                    $commit = trim($commitOutput);
+                }
+            }
+        }
+    }
+
+    // 3. Fallbacks and normalization
+    if ($commit === '' && $version !== '' && preg_match('/^[0-9a-f]{7,40}$/i', $version)) {
+        $commit = substr($version, 0, 7);
+    }
+
+    // Determine channel
+    $isNightly = false;
+    if (strcasecmp($channel, 'nightly') === 0 || stripos($version, 'nightly') !== false) {
+        $isNightly = true;
+        $channel = 'Nightly';
+    } elseif (strcasecmp($channel, 'lts') === 0 || ($version !== '' && preg_match('/^\d+\.\d+(\.\d+)?/', $version))) {
+        $isNightly = false;
+        $channel = 'LTS';
+    } else {
+        // If we have a commit hash without an LTS semver version, it's Nightly
+        if ($commit !== '' && ($version === '' || $version === $commit)) {
+            $isNightly = true;
+            $channel = 'Nightly';
+        } else {
+            $isNightly = false;
+            $channel = 'LTS';
+        }
+    }
+
+    if ($isNightly) {
+        if ($commit === '' && $version !== '') {
+            $commit = $version;
+        }
+        $tag = $commit !== '' ? $commit : 'nightly';
+    } else {
+        if ($version === '') {
+            $version = '2.3.0';
+        }
+        $tag = $version;
+    }
+
+    $cached = [
+        'channel'    => $channel,
+        'is_nightly' => $isNightly,
+        'version'    => $version,
+        'commit'     => $commit,
+        'tag'        => $tag,
+    ];
+
+    return $cached;
+}

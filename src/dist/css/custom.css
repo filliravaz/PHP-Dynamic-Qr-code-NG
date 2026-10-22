@@ -1,9 +1,84 @@
-
-
 .bulk-action-wrapper {
     padding: 10px 0;
 }
 #err-msg {
     display: none;
     color: red;
+}
+
+/* Align footer block on login / change-password pages */
+.login-page .main-footer {
+    margin-left: 0 !important;
+    margin-top: 1.5rem;
+    width: 440px;
+    max-width: 90%;
+    text-align: center;
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+    background-color: #fff;
+    box-shadow: 0 0 1px rgba(0, 0, 0, .125), 0 1px 3px rgba(0, 0, 0, .2);
+    padding: 0.75rem 1rem;
+}
+
+.login-page .main-footer .float-right {
+    float: none !important;
+    display: block !important;
+    margin-top: 0.25rem;
+}
+
+/* Dark Mode Enhancements */
+.dark-mode .text-dark {
+    color: #e9ecef !important;
+}
+
+.dark-mode .login-page {
+    background-color: #343a40 !important;
+}
+
+.dark-mode .login-page .main-footer {
+    background-color: #3f474e !important;
+    border-color: #4b545c !important;
+    color: #c2c7d0 !important;
+}
+
+.dark-mode .card.card-primary:not(.card-outline) > .card-header {
+    background-color: #007bff;
+    color: #fff;
+}
+
+/* Control sidebar preset buttons */
+.theme-preset-btn {
+    display: inline-flex;
+    align-items: center;
+    width: 100%;
+    padding: 6px 10px;
+    margin-bottom: 6px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.05);
+    color: #c2c7d0;
+    cursor: pointer;
+    transition: all 0.15s ease-in-out;
+    text-align: left;
+}
+
+.theme-preset-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.theme-preset-btn.active {
+    background: #007bff;
+    border-color: #007bff;
+    color: #fff;
+}
+
+.theme-preset-btn .preset-icon {
+    margin-right: 8px;
+    font-size: 1rem;
+    width: 20px;
+    text-align: center;
 }
