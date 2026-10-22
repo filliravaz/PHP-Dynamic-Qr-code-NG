@@ -167,10 +167,10 @@ $optUid = 'opt_' . bin2hex(random_bytes(4));
                 <div class="col-12 col-md-3 mb-2">
                     <label class="text-sm">Custom Logo Upload</label>
                     <div class="custom-file">
-                        <input type="file" class="custom-file-input input-logo-file" name="logo_file" accept="image/png,image/jpeg,image/svg+xml,image/webp">
+                        <input type="file" class="custom-file-input input-logo-file" name="logo_file" accept="image/png,image/jpeg,image/webp">
                         <label class="custom-file-label text-truncate">Choose image...</label>
                     </div>
-                    <small class="text-muted">PNG, JPG, SVG or WebP (max 5MB)</small>
+                    <small class="text-muted">PNG, JPG or WebP (max 5MB)</small>
                 </div>
                 <div class="col-12 col-md-3 mb-2">
                     <label class="text-sm">Logo Scale: <strong class="logo-scale-value">20%</strong></label>

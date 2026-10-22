@@ -601,11 +601,15 @@ class Qrcode {
                             path: $logoPath,
                             resizeToWidth: $logoWidth,
                             resizeToHeight: $logoWidth,
-                            punchoutBackground: ($options['logoShape'] !== 'none')
+                            punchoutBackground: false
                         );
                     }
 
-                    $result = $writer->write($qrCode, $logo);
+                    $writerOptions = [];
+                    if (in_array($options['roundBlock'], ['shrink', 'dots', 'rounded'], true)) {
+                        $writerOptions['compact'] = false;
+                    }
+                    $result = !empty($writerOptions) ? $writer->write($qrCode, $logo, null, $writerOptions) : $writer->write($qrCode, $logo);
                     $svgContent = $result->getString();
 
                     if ($options['gradientType'] !== 'none') {
@@ -639,9 +643,9 @@ class Qrcode {
                     }
 
                     if (in_array($options['roundBlock'], ['shrink', 'dots'], true)) {
-                        $svgContent = preg_replace('/(<rect\b(?![^>]*\bid=)(?![^>]*\brx=)[^>]*)(>)/i', '$1 rx="40%" ry="40%"$2', $svgContent);
+                        $svgContent = preg_replace('/(<rect\b(?![^>]*\brx=)[^>]*\bid=["\']?block["\']?[^>]*)(>)/i', '$1 rx="40%" ry="40%"$2', $svgContent);
                     } elseif ($options['roundBlock'] === 'rounded') {
-                        $svgContent = preg_replace('/(<rect\b(?![^>]*\bid=)(?![^>]*\brx=)[^>]*)(>)/i', '$1 rx="25%" ry="25%"$2', $svgContent);
+                        $svgContent = preg_replace('/(<rect\b(?![^>]*\brx=)[^>]*\bid=["\']?block["\']?[^>]*)(>)/i', '$1 rx="25%" ry="25%"$2', $svgContent);
                     }
 
                     if ($options['logoShape'] === 'circle') {
@@ -709,6 +713,9 @@ class Qrcode {
         if ($last_id) {
             $this->success('Qr code added successfully!');
         } else {
+            if (file_exists($filename)) {
+                @unlink($filename);
+            }
             $this->failure('Insert failed: ' . $db->getLastError());
         }
     }
@@ -724,17 +731,29 @@ class Qrcode {
         $oldFile = $this->getSafeFilePath($old_qrcode["filename"], $oldFormat);
         $newFile = $this->getSafeFilePath($data_to_db['filename'], $oldFormat);
 
+        $renamed = false;
         if (!file_exists($newFile) || $newFile === $oldFile) {
-            $db->where('id', (int)$input_data["id"]);
-            $stat = $db->update($this->table, $data_to_db);
-
             if (file_exists($oldFile) && $oldFile !== $newFile) {
                 try {
-                    rename($oldFile, $newFile);
+                    if (!rename($oldFile, $newFile)) {
+                        $this->failure('Failed to rename QR code file.');
+                    }
+                    $renamed = true;
                 } catch (Exception $e) {
                     $this->failure($e->getMessage());
                 }
             }
+
+            $db->where('id', (int)$input_data["id"]);
+            $stat = $db->update($this->table, $data_to_db);
+
+            if (!$stat && $renamed) {
+                if (!@rename($newFile, $oldFile)) {
+                    $this->failure('Update failed: ' . $db->getLastError() . ' (Rollback failed: unable to restore file)');
+                }
+            }
+
+
         } else {
             $this->failure('You cannot edit a qr code with an existing name on the server!');
         }
@@ -750,22 +769,35 @@ class Qrcode {
         $db = getDbInstance();
         $qrcode = $this->getQrcode($id);
 
+        $filePath = $this->getSafeFilePath($qrcode["filename"] ?? '', $qrcode["format"] ?? 'png');
+        $stagedPath = null;
+        if (file_exists($filePath)) {
+            $stagedPath = $filePath . '.deleting.' . bin2hex(random_bytes(6));
+            if (!@rename($filePath, $stagedPath)) {
+                $this->failure('Unable to stage QR code file for deletion.');
+            }
+        }
+
         $db->where('id', $id);
         $status = $db->delete($this->table);
 
-        $filePath = $this->getSafeFilePath($qrcode["filename"], $qrcode["format"] ?? 'png');
-        if (file_exists($filePath)) {
-            @unlink($filePath);
+        if (!$status) {
+            if ($stagedPath !== null && file_exists($stagedPath)) {
+                if (!@rename($stagedPath, $filePath)) {
+                    $this->failure('Unable to delete qr code and failed to restore file.');
+                }
+            }
+            $this->failure('Unable to delete qr code');
         }
 
-        if ($status) {
-            if (!$async) {
-                $this->info('Qr code deleted successfully!');
+        if ($stagedPath !== null && file_exists($stagedPath)) {
+            if (!@unlink($stagedPath)) {
+                $this->failure('Unable to finalize deletion of QR code file.');
             }
-        } else {
-            if (!$async) {
-                $this->failure('Unable to delete qr code');
-            }
+        }
+
+        if (!$async) {
+            $this->info('Qr code deleted successfully!');
         }
     }
 

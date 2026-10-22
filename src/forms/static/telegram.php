@@ -11,7 +11,7 @@
                         <div class="input-group-prepend">
                             <span class="input-group-text">@</span>
                         </div>
-                        <input type="text" name="username" class="form-control" placeholder="username" required="required">
+                        <input type="text" name="username" class="form-control" placeholder="username" required="required" pattern="^@?[A-Za-z0-9_]+$" title="Letters, numbers, and underscores only">
                     </div>
                 </div>
             </div>

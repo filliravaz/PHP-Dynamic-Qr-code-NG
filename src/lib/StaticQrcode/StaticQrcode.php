@@ -427,6 +427,9 @@ class StaticQrcode {
     {
         $cleanUser = ltrim(trim($username), '@');
         if (!empty($cleanUser)) {
+            if (!preg_match('/^[A-Za-z0-9_]+$/', $cleanUser)) {
+                $this->failure('Invalid Telegram handle provided.');
+            }
             $url = 'https://t.me/' . $cleanUser;
             if (!empty($message)) {
                 $url .= '?text=' . urlencode(trim($message));
@@ -657,7 +660,15 @@ class StaticQrcode {
             }
             $formattedAmount = '';
             if (!empty($amount)) {
-                $num = number_format((float)str_replace(',', '.', $amount), 2, '.', '');
+                $cleanAmount = str_replace(',', '.', $amount);
+                if (!preg_match('/^(?:0|[1-9]\d*)(?:\.\d+)?$/', $cleanAmount)) {
+                    $this->failure('Invalid amount provided.');
+                }
+                $val = (float)$cleanAmount;
+                if ($val < 0.01 || $val > 999999999.99) {
+                    $this->failure('Invalid amount provided.');
+                }
+                $num = number_format($val, 2, '.', '');
                 $formattedAmount = 'EUR' . $num;
             }
 
@@ -763,8 +774,12 @@ class StaticQrcode {
                        $this->emvTlv('52', '0000') .                   // Merchant Category Code
                        $this->emvTlv('53', '986');                     // Currency BRL
 
-            if (!empty($amount) && (float)$amount > 0) {
-                $payload .= $this->emvTlv('54', number_format((float)str_replace(',', '.', $amount), 2, '.', ''));
+            if (!empty($amount)) {
+                $cleanAmount = str_replace(',', '.', $amount);
+                if (!preg_match('/^(?:0|[1-9]\d*)(?:\.\d+)?$/', $cleanAmount) || (float)$cleanAmount <= 0) {
+                    $this->failure('Invalid amount provided.');
+                }
+                $payload .= $this->emvTlv('54', number_format((float)$cleanAmount, 2, '.', ''));
             }
 
             $cleanName = mb_substr(preg_replace('/[^A-Za-z0-9 ]/', '', $this->transliterateToAscii($merchant_name)), 0, 25);
@@ -802,7 +817,7 @@ class StaticQrcode {
                               '<strong>Name:</strong> ' . htmlspecialchars($merchant_name, ENT_QUOTES, 'UTF-8') . '<br>' .
                               '<strong>City:</strong> ' . htmlspecialchars($merchant_city, ENT_QUOTES, 'UTF-8');
             if (!empty($amount)) {
-                $this->sContent .= '<br><strong>Amount:</strong> R$ ' . htmlspecialchars($amount, ENT_QUOTES, 'UTF-8');
+                $this->sContent .= '<br><strong>Amount:</strong> R$ ' . htmlspecialchars(number_format((float)$cleanAmount, 2, '.', ''), ENT_QUOTES, 'UTF-8');
             }
             if ($cleanTxid !== '***') {
                 $this->sContent .= '<br><strong>TxID:</strong> ' . htmlspecialchars($cleanTxid, ENT_QUOTES, 'UTF-8');
