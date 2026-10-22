@@ -23,7 +23,7 @@
                         <div class="input-group-prepend">
                             <span class="input-group-text">@</span>
                         </div>
-                        <input type="text" name="username" class="form-control" placeholder="username">
+                        <input type="text" name="username" class="form-control" placeholder="username" pattern="^@?[A-Za-z0-9_.\-]+$" title="Letters, numbers, underscores, dashes, and periods only">
                     </div>
                 </div>
             </div>

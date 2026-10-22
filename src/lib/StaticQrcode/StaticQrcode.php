@@ -481,22 +481,40 @@ class StaticQrcode {
             $cleanUser = ltrim($username, '@');
             switch ($platform) {
                 case 'youtube':
+                    if (!preg_match('/^[A-Za-z0-9_.\-]{3,30}$/', $cleanUser)) {
+                        $this->failure('Invalid username provided for the selected platform.');
+                    }
                     $url = 'https://youtube.com/@' . $cleanUser;
                     break;
                 case 'instagram':
+                    if (!preg_match('/^[A-Za-z0-9_.]{1,30}$/', $cleanUser)) {
+                        $this->failure('Invalid username provided for the selected platform.');
+                    }
                     $url = 'https://instagram.com/' . $cleanUser;
                     break;
                 case 'linkedin':
+                    if (!preg_match('/^[A-Za-z0-9_\-]{3,100}$/', $cleanUser)) {
+                        $this->failure('Invalid username provided for the selected platform.');
+                    }
                     $url = 'https://linkedin.com/in/' . $cleanUser;
                     break;
                 case 'twitter':
                 case 'x':
+                    if (!preg_match('/^[A-Za-z0-9_]{1,15}$/', $cleanUser)) {
+                        $this->failure('Invalid username provided for the selected platform.');
+                    }
                     $url = 'https://x.com/' . $cleanUser;
                     break;
                 case 'tiktok':
+                    if (!preg_match('/^[A-Za-z0-9_.]{2,24}$/', $cleanUser)) {
+                        $this->failure('Invalid username provided for the selected platform.');
+                    }
                     $url = 'https://tiktok.com/@' . $cleanUser;
                     break;
                 default:
+                    if (!preg_match('/^[A-Za-z0-9_.\-]+$/', $cleanUser)) {
+                        $this->failure('Invalid username provided for the selected platform.');
+                    }
                     $url = 'https://' . $cleanUser;
                     break;
             }
@@ -546,7 +564,13 @@ class StaticQrcode {
                 case 'sol':
                     $data = 'solana:' . $address;
                     $params = [];
-                    if (!empty($amount)) $params['amount'] = $amount;
+                    if (!empty($amount)) {
+                        $cleanAmount = str_replace(',', '.', $amount);
+                        if (!preg_match('/^(?:0|[1-9]\d*)(?:\.\d+)?$/', $cleanAmount) || (float)$cleanAmount <= 0) {
+                            $this->failure('Invalid amount provided.');
+                        }
+                        $params['amount'] = $cleanAmount;
+                    }
                     if (!empty($message)) $params['message'] = $message;
                     if (!empty($params)) $data .= '?' . http_build_query($params);
                     break;
@@ -555,7 +579,13 @@ class StaticQrcode {
                 case 'xmr':
                     $data = 'monero:' . $address;
                     $params = [];
-                    if (!empty($amount)) $params['tx_amount'] = $amount;
+                    if (!empty($amount)) {
+                        $cleanAmount = str_replace(',', '.', $amount);
+                        if (!preg_match('/^(?:0|[1-9]\d*)(?:\.\d+)?$/', $cleanAmount) || (float)$cleanAmount <= 0) {
+                            $this->failure('Invalid amount provided.');
+                        }
+                        $params['tx_amount'] = $cleanAmount;
+                    }
                     if (!empty($message)) $params['tx_description'] = $message;
                     if (!empty($params)) $data .= '?' . http_build_query($params);
                     break;
@@ -683,8 +713,8 @@ class StaticQrcode {
                 $iban,
                 $formattedAmount,
                 '',
-                mb_substr($remittance, 0, 140),
                 '',
+                mb_substr($remittance, 0, 140),
                 ''
             ];
 

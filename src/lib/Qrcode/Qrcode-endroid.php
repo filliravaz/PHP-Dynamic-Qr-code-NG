@@ -631,15 +631,33 @@ class Qrcode {
                         $fgHex = '#' . $options['foreground'];
                         $gHex = '#' . $options['gradientColor'];
 
+                        $vbMinX = 0.0;
+                        $vbMinY = 0.0;
+                        $vbW = (float)$options['size'];
+                        $vbH = (float)$options['size'];
+                        if (preg_match('/viewBox=["\']\s*(-?[\d.]+)[,\s]+(-?[\d.]+)[,\s]+(-?[\d.]+)[,\s]+(-?[\d.]+)\s*["\']/i', $svgContent, $vbMatches)) {
+                            $vbMinX = (float)$vbMatches[1];
+                            $vbMinY = (float)$vbMatches[2];
+                            $vbW = (float)$vbMatches[3];
+                            $vbH = (float)$vbMatches[4];
+                        }
+                        $cx = $vbMinX + ($vbW / 2);
+                        $cy = $vbMinY + ($vbH / 2);
+
                         if ($options['gradientType'] === 'radial') {
-                            $gradDef = '<defs><radialGradient id="qr-grad" cx="50%" cy="50%" r="70%">'
+                            $r = max($vbW, $vbH) * 0.7;
+                            $gradDef = '<defs><radialGradient id="qr-grad" gradientUnits="userSpaceOnUse" cx="' . $cx . '" cy="' . $cy . '" r="' . $r . '">'
                                      . '<stop offset="0%" stop-color="' . $fgHex . '"/>'
                                      . '<stop offset="' . $options['gradientBalance'] . '%" stop-color="' . $midHex . '"/>'
                                      . '<stop offset="100%" stop-color="' . $gHex . '"/>'
                                      . '</radialGradient></defs>';
                         } else {
                             $angle = $options['gradientAngle'];
-                            $gradDef = '<defs><linearGradient id="qr-grad" x1="0%" y1="50%" x2="100%" y2="50%" gradientTransform="rotate(' . $angle . ', 0.5, 0.5)">'
+                            $x1 = $vbMinX;
+                            $y1 = $cy;
+                            $x2 = $vbMinX + $vbW;
+                            $y2 = $cy;
+                            $gradDef = '<defs><linearGradient id="qr-grad" gradientUnits="userSpaceOnUse" x1="' . $x1 . '" y1="' . $y1 . '" x2="' . $x2 . '" y2="' . $y2 . '" gradientTransform="rotate(' . $angle . ', ' . $cx . ', ' . $cy . ')">'
                                      . '<stop offset="0%" stop-color="' . $fgHex . '"/>'
                                      . '<stop offset="' . $options['gradientBalance'] . '%" stop-color="' . $midHex . '"/>'
                                      . '<stop offset="100%" stop-color="' . $gHex . '"/>'
