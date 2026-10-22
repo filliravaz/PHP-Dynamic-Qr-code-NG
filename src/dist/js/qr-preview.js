@@ -1,6 +1,7 @@
 /**
  * Real-time Sticky Live QR Code Preview for PHP-Dynamic-Qr-code-NG
  * Zero external network calls; pure client-side canvas generation
+ * Supports Linear/Radial Gradients, Eye Corner Marker Styling, and Custom Punchout Shapes
  */
 (function (window, document, $) {
     'use strict';
@@ -480,10 +481,34 @@
     // -------------------------------------------------------------
     // Live Preview Engine Controller
     // -------------------------------------------------------------
-    var activeLogoImg = null;
     var customLogoDataUrl = null;
     var presetLogoName = '';
     var renderTimer = null;
+
+    function toValidColor(color, fallback) {
+        if (!color || typeof color !== 'string') return fallback;
+        color = color.trim();
+        if (/^[0-9a-fA-F]{3,8}$/.test(color)) {
+            return '#' + color;
+        }
+        return color || fallback;
+    }
+
+    function hexToRgb(hex, fallback) {
+        if (!hex || typeof hex !== 'string') return fallback || { r: 0, g: 0, b: 0 };
+        hex = hex.replace(/^#/, '').trim();
+        if (hex.length === 3) {
+            hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+        }
+        if (/^[0-9a-fA-F]{6}$/.test(hex)) {
+            return {
+                r: parseInt(hex.substring(0, 2), 16),
+                g: parseInt(hex.substring(2, 4), 16),
+                b: parseInt(hex.substring(4, 6), 16)
+            };
+        }
+        return fallback || { r: 0, g: 0, b: 0 };
+    }
 
     function getActiveForm() {
         if ($('#dynamic_form').length) {
@@ -498,13 +523,28 @@
 
     function extractFormData() {
         var $form = getActiveForm();
-        var fg = $form.find('.input-foreground').val() || $form.find('input[name="foreground"]').val() || '#000000';
-        var bg = $form.find('.input-background').val() || $form.find('input[name="background"]').val() || '#ffffff';
+        var rawFg = $form.find('.input-foreground').val() || $form.find('input[name="foreground"]').val() || '#000000';
+        var rawBg = $form.find('.input-background').val() || $form.find('input[name="background"]').val() || '#ffffff';
+        var fg = toValidColor(rawFg, '#000000');
+        var bg = toValidColor(rawBg, '#ffffff');
+
         var level = $form.find('.select-level').val() || $form.find('select[name="level"]').val() || 'M';
         var size = parseInt($form.find('.select-size').val() || $form.find('select[name="size"]').val() || 300, 10);
         var roundBlock = $form.find('.select-round-block').val() || $form.find('select[name="round_block"]').val() || 'margin';
         var scale = parseInt($form.find('.input-logo-scale').val() || $form.find('input[name="logo_scale"]').val() || 20, 10);
         var preset = $form.find('.input-preset-logo').val() || '';
+        var logoShape = $form.find('.select-logo-shape').val() || 'circle';
+
+        var gradientType = $form.find('.select-gradient-type').val() || 'none';
+        var rawGColor = $form.find('.input-gradient-color').val() || '#007bff';
+        var gradientColor = toValidColor(rawGColor, '#007bff');
+        var gradientAngle = parseInt($form.find('.input-gradient-angle').val() || 45, 10);
+        var gradientBalance = parseInt($form.find('.input-gradient-balance').val() || 50, 10);
+        var gradientDirection = $form.find('.select-gradient-direction').val() || 'vertical';
+
+        var customEyesEnabled = $form.find('.toggle-custom-eyes').is(':checked');
+        var eyeOuter = customEyesEnabled ? toValidColor($form.find('.input-eye-outer').val(), fg) : '';
+        var eyeInner = customEyesEnabled ? toValidColor($form.find('.input-eye-inner').val(), fg) : '';
 
         // Extract QR payload based on form fields
         var payload = 'https://example.com';
@@ -579,8 +619,7 @@
             var btcAddr = $form.find('input[name="address"]').val() || '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa';
             payload = 'bitcoin:' + btcAddr;
         } else {
-            // General fallback: grab first text input or textarea
-            var firstInput = $form.find('input[type="text"]:visible, input[type="url"]:visible, textarea:visible').not('.input-foreground, .input-background, .input-filename').first();
+            var firstInput = $form.find('input[type="text"]:visible, input[type="url"]:visible, textarea:visible').not('.input-foreground, .input-background, .input-filename, .input-gradient-color, .input-eye-outer, .input-eye-inner').first();
             if (firstInput.length && firstInput.val()) {
                 payload = firstInput.val();
             }
@@ -593,9 +632,33 @@
             size: size,
             roundBlock: roundBlock,
             logoScale: scale,
+            logoShape: logoShape,
             presetLogo: preset,
+            gradientType: gradientType,
+            gradientColor: gradientColor,
+            gradientAngle: gradientAngle,
+            gradientBalance: gradientBalance,
+            gradientDirection: gradientDirection,
+            customEyesEnabled: customEyesEnabled,
+            eyeOuter: eyeOuter,
+            eyeInner: eyeInner,
             payload: payload
         };
+    }
+
+    // Helper to determine whether a module is in outer eye, inner eye, or body
+    function getModuleEyeRole(r, c, N) {
+        var isTL = (r < 7 && c < 7);
+        var isTR = (r < 7 && c >= N - 7);
+        var isBL = (r >= N - 7 && c < 7);
+        if (!isTL && !isTR && !isBL) return 'body';
+
+        var lr = (r < 7) ? r : (r - (N - 7));
+        var lc = (c < 7) ? c : (c - (N - 7));
+
+        if (lr === 0 || lr === 6 || lc === 0 || lc === 6) return 'outer';
+        if (lr >= 2 && lr <= 4 && lc >= 2 && lc <= 4) return 'inner';
+        return 'body';
     }
 
     function renderCanvas() {
@@ -608,29 +671,49 @@
         $('#preview-size-label').text(data.size + ' x ' + data.size + ' px');
         var eccName = { L: 'Low (7%)', M: 'Medium (15%)', Q: 'High (25%)', H: 'Best (30%)' };
         $('#preview-ecc-label').text(eccName[data.level] || data.level);
-        $('#preview-fg-hex').text(data.foreground);
+
+        if (data.gradientType !== 'none') {
+            $('#preview-fg-hex').text(data.foreground + ' → ' + data.gradientColor + ' (' + data.gradientAngle + '°, ' + data.gradientBalance + '%)');
+            $('#preview-fg-swatch').css('background', 'linear-gradient(' + data.gradientAngle + 'deg, ' + data.foreground + ', ' + data.gradientColor + ')');
+        } else {
+            $('#preview-fg-hex').text(data.foreground);
+            $('#preview-fg-swatch').css('background', data.foreground);
+        }
+
         $('#preview-bg-hex').text(data.background);
-        $('#preview-fg-swatch').css('background', data.foreground);
         $('#preview-bg-swatch').css('background', data.background);
-        $('#preview-block-label').text(data.roundBlock.charAt(0).toUpperCase() + data.roundBlock.slice(1));
-        $('#preview-data-label').text(data.payload);
+        var blockStyleNames = {
+            margin: 'Square (Standard)',
+            shrink: 'Dots / Circles',
+            dots: 'Dots / Circles',
+            rounded: 'Rounded Modules',
+            none: 'Square (Compact)',
+            enlarge: 'Square (Enlarged)'
+        };
+        $('#preview-block-label').text(blockStyleNames[data.roundBlock] || 'Square (Standard)');
+
+        if ($('#dynamic_form').length) {
+            $('#preview-data-label').html('<span class="badge badge-warning text-dark mr-1">Target</span> ' + $('<div>').text(data.payload).html());
+        } else {
+            $('#preview-data-label').text(data.payload);
+        }
 
         var emblemLabel = 'None';
+        var shapeName = { circle: 'Round', rounded: 'Rounded', square: 'Square', none: 'Transparent' }[data.logoShape] || 'Round';
         if (customLogoDataUrl) {
-            emblemLabel = 'Custom File (' + data.logoScale + '%)';
+            emblemLabel = 'Custom File (' + shapeName + ', ' + data.logoScale + '%)';
         } else if (presetLogoName) {
-            emblemLabel = presetLogoName.charAt(0).toUpperCase() + presetLogoName.slice(1) + ' (' + data.logoScale + '%)';
+            emblemLabel = presetLogoName.charAt(0).toUpperCase() + presetLogoName.slice(1) + ' (' + shapeName + ', ' + data.logoScale + '%)';
         }
         $('#preview-logo-label').text(emblemLabel);
 
-        // Map ECC level
+        // Map ECC level (elevate if emblem is present)
         var eccMapping = {
             L: QRErrorCorrectLevel.L,
             M: QRErrorCorrectLevel.M,
             Q: QRErrorCorrectLevel.Q,
             H: QRErrorCorrectLevel.H
         };
-        // Auto-elevate ECC if emblem is present
         var ecc = eccMapping[data.level] !== undefined ? eccMapping[data.level] : QRErrorCorrectLevel.M;
         if (customLogoDataUrl || presetLogoName) {
             ecc = QRErrorCorrectLevel.H;
@@ -653,7 +736,7 @@
         }
 
         var moduleCount = qr.getModuleCount();
-        var canvasSize = 240; // High resolution on display
+        var canvasSize = 240; // High resolution display
         canvas.width = canvasSize;
         canvas.height = canvasSize;
 
@@ -665,31 +748,107 @@
         var drawSize = canvasSize - (margin * 2);
         var moduleSize = drawSize / moduleCount;
 
-        // Draw Modules
-        ctx.fillStyle = data.foreground;
+        // Compute Body Gradient or Solid FillStyle
+        var bodyFillStyle = data.foreground;
+        if (data.gradientType === 'linear') {
+            try {
+                var rad = (data.gradientAngle) * (Math.PI / 180);
+                var ux = Math.cos(rad);
+                var uy = Math.sin(rad);
+                var L = (drawSize / 2) * (Math.abs(ux) + Math.abs(uy));
+                var cx = margin + (drawSize / 2);
+                var cy = margin + (drawSize / 2);
+                var x0 = cx - ux * L;
+                var y0 = cy - uy * L;
+                var x1 = cx + ux * L;
+                var y1 = cy + uy * L;
+
+                var grad = ctx.createLinearGradient(x0, y0, x1, y1);
+                var tMid = Math.max(0.1, Math.min(0.9, data.gradientBalance / 100));
+
+                var c1 = hexToRgb(data.foreground, { r: 0, g: 0, b: 0 });
+                var c2 = hexToRgb(data.gradientColor, { r: 0, g: 123, b: 255 });
+                var midR = Math.round((c1.r + c2.r) / 2);
+                var midG = Math.round((c1.g + c2.g) / 2);
+                var midB = Math.round((c1.b + c2.b) / 2);
+                var midColor = 'rgb(' + midR + ',' + midG + ',' + midB + ')';
+
+                grad.addColorStop(0, data.foreground);
+                grad.addColorStop(tMid, midColor);
+                grad.addColorStop(1, data.gradientColor);
+                bodyFillStyle = grad;
+            } catch (e) {
+                bodyFillStyle = data.foreground;
+            }
+        } else if (data.gradientType === 'radial') {
+            try {
+                var cx = margin + (drawSize / 2);
+                var cy = margin + (drawSize / 2);
+                var rGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, drawSize / 1.3);
+                var tMid = Math.max(0.1, Math.min(0.9, data.gradientBalance / 100));
+
+                var c1 = hexToRgb(data.foreground, { r: 0, g: 0, b: 0 });
+                var c2 = hexToRgb(data.gradientColor, { r: 0, g: 123, b: 255 });
+                var midR = Math.round((c1.r + c2.r) / 2);
+                var midG = Math.round((c1.g + c2.g) / 2);
+                var midB = Math.round((c1.b + c2.b) / 2);
+                var midColor = 'rgb(' + midR + ',' + midG + ',' + midB + ')';
+
+                rGrad.addColorStop(0, data.foreground);
+                rGrad.addColorStop(tMid, midColor);
+                rGrad.addColorStop(1, data.gradientColor);
+                bodyFillStyle = rGrad;
+            } catch (e) {
+                bodyFillStyle = data.foreground;
+            }
+        }
+
+        // Draw Modules with Eye Role Coloring
         for (var row = 0; row < moduleCount; row++) {
             for (var col = 0; col < moduleCount; col++) {
                 if (qr.isDark(row, col)) {
                     var x = margin + col * moduleSize;
                     var y = margin + row * moduleSize;
 
-                    if (data.roundBlock === 'shrink') {
+                    if (data.customEyesEnabled) {
+                        var eyeRole = getModuleEyeRole(row, col, moduleCount);
+                        if (eyeRole === 'outer' && data.eyeOuter) {
+                            ctx.fillStyle = data.eyeOuter;
+                        } else if (eyeRole === 'inner' && data.eyeInner) {
+                            ctx.fillStyle = data.eyeInner;
+                        } else {
+                            ctx.fillStyle = bodyFillStyle;
+                        }
+                    } else {
+                        ctx.fillStyle = bodyFillStyle;
+                    }
+
+                    if (data.roundBlock === 'shrink' || data.roundBlock === 'dots') {
                         var dotRadius = moduleSize * 0.42;
                         ctx.beginPath();
                         ctx.arc(x + moduleSize / 2, y + moduleSize / 2, dotRadius, 0, Math.PI * 2);
                         ctx.fill();
+                    } else if (data.roundBlock === 'rounded') {
+                        var rad = Math.max(2, Math.round(moduleSize * 0.28));
+                        if (ctx.roundRect) {
+                            ctx.beginPath();
+                            ctx.roundRect(x + 0.3, y + 0.3, moduleSize - 0.6, moduleSize - 0.6, rad);
+                            ctx.fill();
+                        } else {
+                            ctx.fillRect(x, y, moduleSize, moduleSize);
+                        }
                     } else if (data.roundBlock === 'enlarge') {
                         ctx.fillRect(x - 0.3, y - 0.3, moduleSize + 0.6, moduleSize + 0.6);
                     } else {
-                        // Margin / crisp
+                        // Margin / crisp / standard square
                         ctx.fillRect(x, y, moduleSize, moduleSize);
                     }
                 }
             }
         }
 
-        // Draw Emblem / Logo if active
-        var logoSource = customLogoDataUrl || (presetLogoName ? 'dist/img/presets/' + presetLogoName + '.svg' : null);
+        // Draw Center Emblem / Logo if active
+        var logoSource = customLogoDataUrl || (presetLogoName ? 'dist/img/presets/' + presetLogoName + '.svg?v=' + (window.__qrAssetVersion || Date.now()) : null);
         if (logoSource) {
             var logoImg = new Image();
             logoImg.crossOrigin = 'anonymous';
@@ -699,15 +858,32 @@
                 var logoY = (canvasSize - logoPixelSize) / 2;
                 var punchoutPadding = Math.max(4, Math.round(moduleSize * 0.8));
 
-                // Center Punchout Background
-                ctx.fillStyle = data.background;
-                ctx.beginPath();
-                var punchX = logoX - punchoutPadding;
-                var punchY = logoY - punchoutPadding;
-                var punchDim = logoPixelSize + (punchoutPadding * 2);
-                var radius = 6;
-                ctx.roundRect ? ctx.roundRect(punchX, punchY, punchDim, punchDim, radius) : ctx.fillRect(punchX, punchY, punchDim, punchDim);
-                ctx.fill();
+                // Punchout Shape Background
+                if (data.logoShape !== 'none') {
+                    ctx.fillStyle = data.background;
+                    ctx.beginPath();
+
+                    if (data.logoShape === 'circle') {
+                        var radius = (logoPixelSize / 2) + punchoutPadding;
+                        ctx.arc(canvasSize / 2, canvasSize / 2, radius, 0, Math.PI * 2);
+                        ctx.fill();
+                    } else if (data.logoShape === 'rounded') {
+                        var punchX = logoX - punchoutPadding;
+                        var punchY = logoY - punchoutPadding;
+                        var punchDim = logoPixelSize + (punchoutPadding * 2);
+                        if (ctx.roundRect) {
+                            ctx.roundRect(punchX, punchY, punchDim, punchDim, 8);
+                        } else {
+                            ctx.fillRect(punchX, punchY, punchDim, punchDim);
+                        }
+                        ctx.fill();
+                    } else if (data.logoShape === 'square') {
+                        var punchX = logoX - punchoutPadding;
+                        var punchY = logoY - punchoutPadding;
+                        var punchDim = logoPixelSize + (punchoutPadding * 2);
+                        ctx.fillRect(punchX, punchY, punchDim, punchDim);
+                    }
+                }
 
                 // Draw Emblem Image
                 ctx.drawImage(logoImg, logoX, logoY, logoPixelSize, logoPixelSize);
@@ -718,8 +894,60 @@
 
     function scheduleRender() {
         if (renderTimer) clearTimeout(renderTimer);
-        renderTimer = setTimeout(renderCanvas, 80);
+        renderTimer = setTimeout(renderCanvas, 60);
     }
+
+    // Toggle gradient & eye marker subfields visibility
+    window.updateQrGradientVisibility = function () {
+        $('.select-gradient-type').each(function () {
+            var $select = $(this);
+            var $card = $select.closest('.card-body');
+            var val = $select.val();
+            if (val === 'linear') {
+                $card.find('.gradient-color-group').show();
+                $card.find('.gradient-rotation-group').show();
+                $card.find('.gradient-balance-group').show();
+                $card.find('.gradient-direction-group').hide();
+            } else if (val === 'radial') {
+                $card.find('.gradient-color-group').show();
+                $card.find('.gradient-rotation-group').hide();
+                $card.find('.gradient-balance-group').show();
+                $card.find('.gradient-direction-group').hide();
+            } else {
+                $card.find('.gradient-color-group').hide();
+                $card.find('.gradient-rotation-group').hide();
+                $card.find('.gradient-balance-group').hide();
+                $card.find('.gradient-direction-group').hide();
+            }
+
+            if ($.fn.colorpicker) {
+                $card.find('.gradient-color-group .my-colorpicker2').each(function () {
+                    try { $(this).colorpicker('destroy'); } catch(e){}
+                    try { $(this).colorpicker(); } catch(e){}
+                });
+            }
+        });
+
+        $('.toggle-custom-eyes').each(function () {
+            var $chk = $(this);
+            var $card = $chk.closest('.card-body');
+            if ($chk.is(':checked')) {
+                $card.find('.custom-eyes-group').css('display', 'flex');
+                if ($.fn.colorpicker) {
+                    $card.find('.custom-eyes-group .my-colorpicker2').each(function () {
+                        try { $(this).colorpicker('destroy'); } catch(e){}
+                        try { $(this).colorpicker(); } catch(e){}
+                    });
+                }
+            } else {
+                $card.find('.custom-eyes-group').hide();
+            }
+        });
+
+        if (typeof scheduleRender === 'function') {
+            scheduleRender();
+        }
+    };
 
     // Bind event listeners
     $(document).ready(function () {
@@ -736,7 +964,6 @@
                     $('.btn-preset-logo').removeClass('active');
                     $('.btn-preset-logo[data-preset=""]').addClass('active');
                     $('.input-preset-logo').val('');
-                    // Auto select High ECC
                     $('.select-level').val('H');
                     scheduleRender();
                 };
@@ -761,7 +988,6 @@
             $form.find('.custom-file-label').text('Choose image...');
 
             if (preset) {
-                // Elevate ECC
                 $form.find('.select-level').val('H');
             }
             scheduleRender();
@@ -774,20 +1000,78 @@
             scheduleRender();
         });
 
-        // Inputs & Selects
+        // Gradient Rotation Angle Slider
+        $(document).on('input change', '.input-gradient-angle', function () {
+            var val = $(this).val();
+            var $card = $(this).closest('.card-body');
+            $card.find('.gradient-angle-val').text(val + '°');
+            $card.find('.btn-quick-angle').removeClass('active');
+            $card.find('.btn-quick-angle[data-angle="' + val + '"]').addClass('active');
+            scheduleRender();
+        });
+
+        // Gradient Quick Angle Buttons
+        $(document).on('click', '.btn-quick-angle', function (e) {
+            e.preventDefault();
+            var angle = $(this).data('angle');
+            var $card = $(this).closest('.card-body');
+            $card.find('.input-gradient-angle').val(angle).trigger('change');
+        });
+
+        // Gradient Balance Slider
+        $(document).on('input change', '.input-gradient-balance', function () {
+            var val = $(this).val();
+            var $card = $(this).closest('.card-body');
+            $card.find('.gradient-balance-val').text(val + '%');
+            scheduleRender();
+        });
+
+        // Clicking on any colorpicker text input also triggers the popup
+        $(document).on('click focus', '.my-colorpicker2 input', function () {
+            var $cp = $(this).closest('.my-colorpicker2');
+            if ($cp.data('colorpicker')) {
+                $cp.colorpicker('show');
+            }
+        });
+
+        // Gradient & Custom Eyes switches
+        $(document).on('change input', '.select-gradient-type, .toggle-custom-eyes', function () {
+            window.updateQrGradientVisibility();
+        });
+
+        // Custom eye label click
+        $(document).on('click', '.toggle-custom-eyes-label', function () {
+            setTimeout(window.updateQrGradientVisibility, 20);
+        });
+
+        // Text input color changes: updates swatch
+        $(document).on('input change', '.my-colorpicker2 input[type="text"]', function () {
+            var col = ($(this).val() || '').trim();
+            if (col && !col.startsWith('#') && /^[0-9a-fA-F]{3,8}$/.test(col)) {
+                col = '#' + col;
+            }
+            if (col) {
+                $(this).closest('.my-colorpicker2').find('.fa-square').css('color', col);
+            }
+            scheduleRender();
+        });
+
+        // Inputs & Selects generic listener
         $(document).on('input change keyup', 'input, textarea, select', function () {
             scheduleRender();
         });
 
-        // Color picker changes
-        $('.my-colorpicker2').on('colorpickerChange', function (event) {
-            $(this).find('input').val(event.color.toString());
-            $(this).find('.fa-square').css('color', event.color.toString());
+        // Color picker changes - scoped to the changed container
+        $(document).on('colorpickerChange', '.my-colorpicker2', function (event) {
+            var colorVal = (event && event.color) ? event.color.toString() : $(this).find('input[type="text"]').val();
+            $(this).find('input[type="text"]').val(colorVal);
+            $(this).find('.fa-square').css('color', colorVal);
             scheduleRender();
         });
 
         // Tab changes
         $('a[data-toggle="pill"]').on('shown.bs.tab', function () {
+            window.updateQrGradientVisibility();
             scheduleRender();
         });
 
@@ -805,7 +1089,8 @@
             document.body.removeChild(link);
         });
 
-        // Initial render
+        // Initial setup
+        window.updateQrGradientVisibility();
         scheduleRender();
     });
 

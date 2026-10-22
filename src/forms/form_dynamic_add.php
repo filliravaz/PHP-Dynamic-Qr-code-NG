@@ -17,7 +17,7 @@
                 <div class="form-group">
                     <label for="identifier">Redirect Identifier</label>
                     <input type="text" class="form-control" placeholder="Auto-generated unique slug" disabled>
-                    <small class="form-text text-muted">A random redirect slug is assigned automatically upon creation.</small>
+                    <small class="form-text text-muted">A random redirect slug is assigned automatically upon creation. <em>Disclaimer: This QR code may differ from the finished.</em></small>
                 </div>
             </div>
         </div>
@@ -72,6 +72,94 @@
         </div>
     </div>
 
+    <!-- Color Styling & Gradient Section -->
+    <div class="col-sm-12 mb-3">
+        <div class="card card-secondary card-outline">
+            <div class="card-header py-2">
+                <h3 class="card-title text-sm"><i class="fas fa-fill-drip mr-1"></i> Color Styling, Gradients & Eye Markers</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" data-card-widget="collapse"><i class="fas fa-minus"></i></button>
+                </div>
+            </div>
+            <div class="card-body py-3">
+                <div class="row">
+                    <div class="col-12 col-md-3 mb-2">
+                        <label class="text-sm">Color Mode</label>
+                        <select name="gradient_type" class="form-control select-gradient-type" onchange="window.updateQrGradientVisibility && window.updateQrGradientVisibility()">
+                            <option value="none" selected>Solid Single Color</option>
+                            <option value="linear">Linear Gradient (Dual Color)</option>
+                            <option value="radial">Radial Gradient (Center Outward)</option>
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-3 mb-2 gradient-color-group" style="display: none;">
+                        <label class="text-sm">Gradient Secondary Color</label>
+                        <div class="input-group my-colorpicker2">
+                            <div class="input-group-prepend">
+                                <span class="input-group-text"><i class="fas fa-square" style="color: #007bff;"></i></span>
+                            </div>
+                            <input type="text" class="form-control input-gradient-color" name="gradient_color" value="#007bff">
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-3 mb-2 gradient-rotation-group" style="display: none;">
+                        <div class="d-flex justify-content-between">
+                            <label class="text-sm">Rotation Angle</label>
+                            <span class="badge badge-info gradient-angle-val text-xs align-self-center">45°</span>
+                        </div>
+                        <input type="range" class="custom-range input-gradient-angle" name="gradient_angle" min="0" max="360" step="5" value="45">
+                        <div class="btn-group btn-group-toggle w-100 mt-1">
+                            <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-angle" data-angle="0">0°</button>
+                            <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-angle" data-angle="45">45°</button>
+                            <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-angle" data-angle="90">90°</button>
+                            <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-angle" data-angle="135">135°</button>
+                            <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-angle" data-angle="180">180°</button>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-3 mb-2 gradient-balance-group" style="display: none;">
+                        <div class="d-flex justify-content-between">
+                            <label class="text-sm">Gradient Balance</label>
+                            <span class="badge badge-secondary gradient-balance-val text-xs align-self-center">50%</span>
+                        </div>
+                        <input type="range" class="custom-range input-gradient-balance" name="gradient_balance" min="10" max="90" step="1" value="50">
+                        <div class="d-flex justify-content-between text-muted" style="font-size: 10px;">
+                            <span>Color 1</span>
+                            <span>Equal (50%)</span>
+                            <span>Color 2</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="border-top pt-2 mt-2">
+                    <div class="custom-control custom-checkbox mb-2">
+                        <input type="checkbox" class="custom-control-input toggle-custom-eyes" id="toggle_eyes_dyn" name="custom_eyes_enabled" value="1" onchange="window.updateQrGradientVisibility && window.updateQrGradientVisibility()">
+                        <label class="custom-control-label text-sm font-weight-normal toggle-custom-eyes-label" for="toggle_eyes_dyn" style="cursor: pointer;">
+                            Customize Eye / Corner Marker Colors independently
+                        </label>
+                    </div>
+                    <div class="row custom-eyes-group" style="display: none;">
+                        <div class="col-12 col-md-6 mb-2">
+                            <label class="text-sm">Outer Eye / Corner Frame Color</label>
+                            <div class="input-group my-colorpicker2">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text"><i class="fas fa-square" style="color: #000000;"></i></span>
+                                </div>
+                                <input type="text" class="form-control input-eye-outer" name="eye_outer" value="#000000">
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-6 mb-2">
+                            <label class="text-sm">Inner Eye / Pupil Dot Color</label>
+                            <div class="input-group my-colorpicker2">
+                                <div class="input-group-prepend">
+                                    <span class="input-group-text"><i class="fas fa-square" style="color: #000000;"></i></span>
+                                </div>
+                                <input type="text" class="form-control input-eye-inner" name="eye_inner" value="#000000">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Advanced Customization & Logo -->
     <div class="col-sm-12 mb-3">
         <div class="card card-secondary card-outline">
@@ -83,16 +171,24 @@
             </div>
             <div class="card-body py-3">
                 <div class="row">
-                    <div class="col-12 col-md-4 mb-2">
+                    <div class="col-12 col-md-3 mb-2">
                         <label class="text-sm">Block / Module Style</label>
                         <select name="round_block" id="round_block" class="form-control select-round-block">
-                            <option value="margin" selected>Margin (Standard)</option>
-                            <option value="none">Crisp / Compact</option>
-                            <option value="enlarge">Enlarge Modules</option>
-                            <option value="shrink">Shrink Modules</option>
+                            <option value="margin" selected>Square (Standard)</option>
+                            <option value="shrink">Dots / Circles</option>
+                            <option value="rounded">Rounded Modules</option>
                         </select>
                     </div>
-                    <div class="col-12 col-md-4 mb-2">
+                    <div class="col-12 col-md-3 mb-2">
+                        <label class="text-sm">Emblem Shape</label>
+                        <select name="logo_shape" id="logo_shape" class="form-control select-logo-shape">
+                            <option value="circle" selected>Circle / Round</option>
+                            <option value="rounded">Rounded Square</option>
+                            <option value="square">Square</option>
+                            <option value="none">None (Transparent)</option>
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-3 mb-2">
                         <label class="text-sm">Custom Logo Upload</label>
                         <div class="custom-file">
                             <input type="file" class="custom-file-input input-logo-file" name="logo_file" id="logo_file" accept="image/png,image/jpeg,image/svg+xml,image/webp">
@@ -100,7 +196,7 @@
                         </div>
                         <small class="text-muted">PNG, JPG, SVG or WebP (max 5MB)</small>
                     </div>
-                    <div class="col-12 col-md-4 mb-2">
+                    <div class="col-12 col-md-3 mb-2">
                         <label class="text-sm">Logo Scale: <strong class="logo-scale-value">20%</strong></label>
                         <input type="range" class="custom-range input-logo-scale" name="logo_scale" id="logo_scale" min="15" max="35" value="20" step="1">
                         <small class="text-muted">Auto-elevates ECC to High for scanability</small>

@@ -1,4 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="128" height="128">
-  <circle cx="12" cy="12" r="12" fill="#000000"/>
-  <path fill="#ffffff" d="M14.2 10.8L18.6 6h-1l-3.8 4.2L10.7 6H6.5l4.7 6.5L6.5 18h1.1l4.1-4.6 3.3 4.6h4.2l-5-7.2zm-1.4 1.6l-.5-.7-3.9-5.4h1.7l3.1 4.4.5.7 4.1 5.7h-1.7l-3.3-4.7z"/>
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Uploaded to: SVG Repo, www.svgrepo.com, Generator: SVG Repo Mixer Tools -->
+<svg width="800px" height="800px" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="500" cy="500" r="500" fill="#000000"/>
+  <g transform="translate(224, 217.935) scale(0.46)">
+    <path fill="#ffffff" d="M714.163 519.284 1160.89 0h-105.86L667.137 450.887 357.328 0H0l468.492 681.821L0 1226.37h105.866l409.625-476.152 327.181 476.152H1200L714.137 519.284h.026ZM569.165 687.828l-47.468-67.894-377.686-540.24h162.604l304.797 435.991 47.468 67.894 396.2 566.721H892.476L569.165 687.854v-.026Z"/>
+  </g>
 </svg>

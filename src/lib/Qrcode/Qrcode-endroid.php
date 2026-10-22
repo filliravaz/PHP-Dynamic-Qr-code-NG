@@ -1,7 +1,8 @@
 <?php
 require_once 'config/config.php';
 
-use Endroid\QrCode\Builder\Builder;
+use Endroid\QrCode\QrCode as EndroidQrCode;
+use Endroid\QrCode\Logo\Logo;
 use Endroid\QrCode\Encoding\Encoding;
 use Endroid\QrCode\ErrorCorrectionLevel;
 use Endroid\QrCode\RoundBlockSizeMode;
@@ -101,7 +102,7 @@ class Qrcode {
         $background = $normalizeColor($input_data['background'] ?? null, 'ffffff');
 
         $roundBlock = 'margin';
-        if (isset($input_data['round_block']) && in_array($input_data['round_block'], ['none', 'margin', 'enlarge', 'shrink'], true)) {
+        if (isset($input_data['round_block']) && in_array($input_data['round_block'], ['none', 'margin', 'enlarge', 'shrink', 'dots', 'rounded'], true)) {
             $roundBlock = $input_data['round_block'];
         }
 
@@ -114,13 +115,43 @@ class Qrcode {
             $logoScale = min(max($scaleVal, 0.10), 0.35);
         }
 
+        $logoShape = 'circle';
+        if (isset($input_data['logo_shape']) && in_array($input_data['logo_shape'], ['circle', 'rounded', 'square', 'none'], true)) {
+            $logoShape = $input_data['logo_shape'];
+        }
+
+        $gradientType = 'none';
+        if (isset($input_data['gradient_type']) && in_array($input_data['gradient_type'], ['linear', 'radial'], true)) {
+            $gradientType = $input_data['gradient_type'];
+        }
+
+        $gradientColor = $normalizeColor($input_data['gradient_color'] ?? null, '007bff');
+        $gradientAngle = isset($input_data['gradient_angle']) ? min(max((int)$input_data['gradient_angle'], 0), 360) : 45;
+        $gradientBalance = isset($input_data['gradient_balance']) ? min(max((int)$input_data['gradient_balance'], 10), 90) : 50;
+        $gradientDirection = 'vertical';
+        if (isset($input_data['gradient_direction']) && in_array($input_data['gradient_direction'], ['vertical', 'horizontal', 'diagonal'], true)) {
+            $gradientDirection = $input_data['gradient_direction'];
+        }
+
+        $customEyes = !empty($input_data['custom_eyes_enabled']);
+        $eyeOuter = ($customEyes && !empty($input_data['eye_outer'])) ? $normalizeColor($input_data['eye_outer'], '') : '';
+        $eyeInner = ($customEyes && !empty($input_data['eye_inner'])) ? $normalizeColor($input_data['eye_inner'], '') : '';
+
         return [
             'errorCorrectionLevel' => $errorCorrectionLevel,
             'size'                 => $size,
             'foreground'           => $foreground,
             'background'           => $background,
             'roundBlock'           => $roundBlock,
-            'logoScale'            => $logoScale
+            'logoScale'            => $logoScale,
+            'logoShape'            => $logoShape,
+            'gradientType'         => $gradientType,
+            'gradientColor'        => $gradientColor,
+            'gradientAngle'        => $gradientAngle,
+            'gradientBalance'      => $gradientBalance,
+            'gradientDirection'    => $gradientDirection,
+            'eyeOuter'             => $eyeOuter,
+            'eyeInner'             => $eyeInner
         ];
     }
 
@@ -173,6 +204,329 @@ class Qrcode {
         return null;
     }
 
+    /**
+     * Determines whether module at (row, col) in an N x N QR code is part of outer eye, inner eye, or body.
+     */
+    private function getEyeRole(int $row, int $col, int $N): string {
+        $isTL = ($row < 7 && $col < 7);
+        $isTR = ($row < 7 && $col >= $N - 7);
+        $isBL = ($row >= $N - 7 && $col < 7);
+        if (!$isTL && !$isTR && !$isBL) return 'body';
+
+        $lr = ($row < 7) ? $row : ($row - ($N - 7));
+        $lc = ($col < 7) ? $col : ($col - ($N - 7));
+
+        if ($lr === 0 || $lr === 6 || $lc === 0 || $lc === 6) return 'outer';
+        if ($lr >= 2 && $lr <= 4 && $lc >= 2 && $lc <= 4) return 'inner';
+        return 'body';
+    }
+
+    /**
+     * Draws a filled rounded rectangle in GD.
+     */
+    private function drawFilledRoundRect($im, int $x, int $y, int $w, int $h, int $radius, int $color): void {
+        $radius = min($radius, (int)floor($w / 2), (int)floor($h / 2));
+        if ($radius <= 0) {
+            imagefilledrectangle($im, $x, $y, $x + $w, $y + $h, $color);
+            return;
+        }
+        imagefilledrectangle($im, $x + $radius, $y, $x + $w - $radius, $y + $h, $color);
+        imagefilledrectangle($im, $x, $y + $radius, $x + $w, $y + $h - $radius, $color);
+        $d = $radius * 2;
+        imagefilledellipse($im, $x + $radius, $y + $radius, $d, $d, $color);
+        imagefilledellipse($im, $x + $w - $radius, $y + $radius, $d, $d, $color);
+        imagefilledellipse($im, $x + $radius, $y + $h - $radius, $d, $d, $color);
+        imagefilledellipse($im, $x + $w - $radius, $y + $h - $radius, $d, $d, $color);
+    }
+
+    /**
+     * Post-processes a rendered raster QR code image in GD:
+     * - Applies linear/radial gradients using user-specified rotation angle and balance percentage.
+     * - Colors outer and inner corner eye markers independently if enabled.
+     * - Carves out the selected punchout shape (circle, rounded square, square) with background padding.
+     * - Draws the emblem / logo image centered with alpha blending.
+     */
+    private function applyRasterStyling($im, array $options, ?string $logoPath) {
+        $width = imagesx($im);
+        $height = imagesy($im);
+
+        $fg = $this->hexToRgb($options['foreground'], ['r' => 0, 'g' => 0, 'b' => 0]);
+        $bg = $this->hexToRgb($options['background'], ['r' => 255, 'g' => 255, 'b' => 255]);
+        $gCol = $this->hexToRgb($options['gradientColor'], ['r' => 0, 'g' => 123, 'b' => 255]);
+
+        $customEyes = !empty($options['eyeOuter']) || !empty($options['eyeInner']);
+        $eyeOuterRgb = !empty($options['eyeOuter']) ? $this->hexToRgb($options['eyeOuter'], $fg) : $fg;
+        $eyeInnerRgb = !empty($options['eyeInner']) ? $this->hexToRgb($options['eyeInner'], $fg) : $fg;
+
+        // Base image is guaranteed black (0) modules on white (255) background
+        $minX = $width; $maxX = 0;
+        $minY = $height; $maxY = 0;
+        $foundDark = false;
+
+        for ($y = 0; $y < $height; $y++) {
+            for ($x = 0; $x < $width; $x++) {
+                $rgb = imagecolorat($im, $x, $y);
+                $r = ($rgb >> 16) & 0xFF;
+                if ($r < 128) {
+                    $foundDark = true;
+                    if ($x < $minX) $minX = $x;
+                    if ($x > $maxX) $maxX = $x;
+                    if ($y < $minY) $minY = $y;
+                    if ($y > $maxY) $maxY = $y;
+                }
+            }
+        }
+
+        $moduleSize = 10.0;
+        $N = 25;
+        if ($foundDark && $maxX > $minX && $maxY > $minY) {
+            $qrW = $maxX - $minX + 1;
+            $checkY = min($maxY, $minY + 2);
+            $eyeRun = 0;
+            for ($x = $minX; $x <= $maxX; $x++) {
+                $r = (imagecolorat($im, $x, $checkY) >> 16) & 0xFF;
+                if ($r < 128) {
+                    $eyeRun++;
+                } else {
+                    break;
+                }
+            }
+            if ($eyeRun >= 7) {
+                $moduleSize = $eyeRun / 7.0;
+            } else {
+                $moduleSize = max(2.0, $qrW / 25.0);
+            }
+            $N = max(21, (int)round($qrW / $moduleSize));
+        }
+
+        // Precompute Gradient Look-Up Table (1001 steps)
+        $tMid = max(0.1, min(0.9, ($options['gradientBalance'] ?? 50) / 100.0));
+        $gradLut = [];
+        for ($i = 0; $i <= 1000; $i++) {
+            $p = $i / 1000.0;
+            if ($p <= $tMid) {
+                $f = ($tMid > 0) ? (0.5 * ($p / $tMid)) : 0.5;
+            } else {
+                $f = ($tMid < 1.0) ? (0.5 + 0.5 * (($p - $tMid) / (1.0 - $tMid))) : 0.5;
+            }
+            $f = max(0.0, min(1.0, $f));
+            $gradLut[$i] = [
+                'r' => (int)round((1.0 - $f) * $fg['r'] + $f * $gCol['r']),
+                'g' => (int)round((1.0 - $f) * $fg['g'] + $f * $gCol['g']),
+                'b' => (int)round((1.0 - $f) * $fg['b'] + $f * $gCol['b'])
+            ];
+        }
+
+        // Gradient geometry
+        $cx = $width / 2.0;
+        $cy = $height / 2.0;
+        $angle = (float)($options['gradientAngle'] ?? 45);
+        $rad = $angle * (M_PI / 180.0);
+        $ux = cos($rad);
+        $uy = sin($rad);
+        $drawDim = ($maxX > $minX) ? ($maxX - $minX + 1) : $width;
+        $L = max(1.0, ($drawDim / 2.0) * (abs($ux) + abs($uy)));
+        $maxR = max(1.0, $drawDim / 1.3);
+
+        $bgAlloc = imagecolorallocate($im, $bg['r'], $bg['g'], $bg['b']);
+
+        $isDots = in_array($options['roundBlock'] ?? 'margin', ['shrink', 'dots'], true);
+        $isRounded = ($options['roundBlock'] ?? '') === 'rounded';
+
+        if ($isDots || $isRounded) {
+            // Reconstruct the N x N module grid from base image
+            $matrix = [];
+            for ($r = 0; $r < $N; $r++) {
+                $yMid = (int)round($minY + ($r + 0.5) * $moduleSize);
+                for ($c = 0; $c < $N; $c++) {
+                    $xMid = (int)round($minX + ($c + 0.5) * $moduleSize);
+                    if ($xMid < $width && $yMid < $height) {
+                        $val = (imagecolorat($im, $xMid, $yMid) >> 16) & 0xFF;
+                        $matrix[$r][$c] = ($val < 128);
+                    } else {
+                        $matrix[$r][$c] = false;
+                    }
+                }
+            }
+
+            // Clear canvas to user background
+            imagefilledrectangle($im, 0, 0, $width, $height, $bgAlloc);
+
+            // Draw customized modules (dots or rounded blocks)
+            for ($r = 0; $r < $N; $r++) {
+                for ($c = 0; $c < $N; $c++) {
+                    if (!$matrix[$r][$c]) {
+                        continue;
+                    }
+
+                    $xMid = (int)round($minX + ($c + 0.5) * $moduleSize);
+                    $yMid = (int)round($minY + ($r + 0.5) * $moduleSize);
+
+                    $target = null;
+                    if ($customEyes && $foundDark) {
+                        $role = $this->getEyeRole($r, $c, $N);
+                        if ($role === 'outer' && !empty($options['eyeOuter'])) {
+                            $target = $eyeOuterRgb;
+                        } elseif ($role === 'inner' && !empty($options['eyeInner'])) {
+                            $target = $eyeInnerRgb;
+                        }
+                    }
+
+                    if ($target === null) {
+                        if ($options['gradientType'] === 'linear') {
+                            $proj = ($xMid - $cx) * $ux + ($yMid - $cy) * $uy;
+                            $p = max(0.0, min(1.0, ($proj + $L) / (2.0 * $L)));
+                            $target = $gradLut[(int)round($p * 1000)];
+                        } elseif ($options['gradientType'] === 'radial') {
+                            $dist = sqrt(($xMid - $cx) * ($xMid - $cx) + ($yMid - $cy) * ($yMid - $cy));
+                            $p = max(0.0, min(1.0, $dist / $maxR));
+                            $target = $gradLut[(int)round($p * 1000)];
+                        } else {
+                            $target = $fg;
+                        }
+                    }
+
+                    $colAlloc = imagecolorallocate($im, $target['r'], $target['g'], $target['b']);
+
+                    if ($isDots) {
+                        $dotDiam = max(2, (int)round($moduleSize * 0.84));
+                        imagefilledellipse($im, $xMid, $yMid, $dotDiam, $dotDiam, $colAlloc);
+                    } else {
+                        // Rounded module
+                        $x1 = (int)round($minX + $c * $moduleSize + 0.5);
+                        $y1 = (int)round($minY + $r * $moduleSize + 0.5);
+                        $dim = max(2, (int)round($moduleSize - 1.0));
+                        $rad = max(2, (int)round($moduleSize * 0.28));
+                        $this->drawFilledRoundRect($im, $x1, $y1, $dim, $dim, $rad, $colAlloc);
+                    }
+                }
+            }
+        } else {
+            // Standard / Square: apply background color and foreground gradients across all pixels
+            for ($y = 0; $y < $height; $y++) {
+                for ($x = 0; $x < $width; $x++) {
+                    $rgb = imagecolorat($im, $x, $y);
+                    $r = ($rgb >> 16) & 0xFF;
+                    // Grayscale base: 0 = pure module, 255 = pure background
+                    $k = 1.0 - ($r / 255.0);
+
+                    if ($k < 0.08) {
+                        // Background pixel: draw user's selected background
+                        imagesetpixel($im, $x, $y, $bgAlloc);
+                        continue;
+                    }
+
+                    $target = null;
+                    if ($customEyes && $foundDark) {
+                        $cIdx = (int)floor(($x - $minX) / $moduleSize);
+                        $rIdx = (int)floor(($y - $minY) / $moduleSize);
+                        $role = $this->getEyeRole($rIdx, $cIdx, $N);
+                        if ($role === 'outer' && !empty($options['eyeOuter'])) {
+                            $target = $eyeOuterRgb;
+                        } elseif ($role === 'inner' && !empty($options['eyeInner'])) {
+                            $target = $eyeInnerRgb;
+                        }
+                    }
+
+                    if ($target === null) {
+                        if ($options['gradientType'] === 'linear') {
+                            $proj = ($x - $cx) * $ux + ($y - $cy) * $uy;
+                            $p = max(0.0, min(1.0, ($proj + $L) / (2.0 * $L)));
+                            $target = $gradLut[(int)round($p * 1000)];
+                        } elseif ($options['gradientType'] === 'radial') {
+                            $dist = sqrt(($x - $cx) * ($x - $cx) + ($y - $cy) * ($y - $cy));
+                            $p = max(0.0, min(1.0, $dist / $maxR));
+                            $target = $gradLut[(int)round($p * 1000)];
+                        } else {
+                            $target = $fg;
+                        }
+                    }
+
+                    $finR = (int)round((1.0 - $k) * $bg['r'] + $k * $target['r']);
+                    $finG = (int)round((1.0 - $k) * $bg['g'] + $k * $target['g']);
+                    $finB = (int)round((1.0 - $k) * $bg['b'] + $k * $target['b']);
+
+                    $pixelColor = imagecolorallocate($im, $finR, $finG, $finB);
+                    imagesetpixel($im, $x, $y, $pixelColor);
+                }
+            }
+        }
+
+        // Punchout Shape and Emblem Compositing
+        if ($logoPath !== null && file_exists($logoPath)) {
+            $logoPixelSize = (int)round($width * $options['logoScale']);
+            $logoX = (int)round(($width - $logoPixelSize) / 2.0);
+            $logoY = (int)round(($height - $logoPixelSize) / 2.0);
+            $punchoutPadding = max(4, (int)round($moduleSize * 0.8));
+            $bgAlloc = imagecolorallocate($im, $bg['r'], $bg['g'], $bg['b']);
+
+            // 1. Draw Punchout Background
+            if ($options['logoShape'] === 'circle') {
+                $radius = ($logoPixelSize / 2.0) + $punchoutPadding;
+                $diam = (int)round($radius * 2.0);
+                imagefilledellipse($im, (int)round($cx), (int)round($cy), $diam, $diam, $bgAlloc);
+            } elseif ($options['logoShape'] === 'square') {
+                $px = $logoX - $punchoutPadding;
+                $py = $logoY - $punchoutPadding;
+                $pdim = $logoPixelSize + ($punchoutPadding * 2);
+                imagefilledrectangle($im, $px, $py, $px + $pdim, $py + $pdim, $bgAlloc);
+            } elseif ($options['logoShape'] === 'rounded') {
+                $px = $logoX - $punchoutPadding;
+                $py = $logoY - $punchoutPadding;
+                $pdim = $logoPixelSize + ($punchoutPadding * 2);
+                $this->drawFilledRoundRect($im, $px, $py, $pdim, $pdim, 8, $bgAlloc);
+            }
+
+            // 2. Load and draw emblem
+            $effectiveLogoPath = $logoPath;
+            $isSvg = strtolower(pathinfo($logoPath, PATHINFO_EXTENSION)) === 'svg';
+            if ($isSvg) {
+                $candidatePng = preg_replace('/\.svg$/i', '.png', $logoPath);
+                if (file_exists($candidatePng)) {
+                    $effectiveLogoPath = $candidatePng;
+                } elseif (extension_loaded('imagick') && class_exists(\Imagick::class)) {
+                    try {
+                        $imLogo = new \Imagick();
+                        $imLogo->setBackgroundColor(new \ImagickPixel('transparent'));
+                        $imLogo->readImage($logoPath);
+                        $imLogo->setImageFormat('png32');
+                        $tempPng = sys_get_temp_dir() . '/logo_raster_' . md5($logoPath . filemtime($logoPath)) . '.png';
+                        $imLogo->writeImage($tempPng);
+                        $imLogo->clear();
+                        $imLogo->destroy();
+                        if (file_exists($tempPng)) {
+                            $effectiveLogoPath = $tempPng;
+                        }
+                    } catch (\Throwable $e) {}
+                }
+            }
+
+            $logoData = @file_get_contents($effectiveLogoPath);
+            if ($logoData !== false) {
+                $logoGd = @imagecreatefromstring($logoData);
+                if ($logoGd !== false) {
+                    imagealphablending($im, true);
+                    imagesavealpha($im, true);
+                    imagecopyresampled(
+                        $im,
+                        $logoGd,
+                        $logoX,
+                        $logoY,
+                        0,
+                        0,
+                        $logoPixelSize,
+                        $logoPixelSize,
+                        imagesx($logoGd),
+                        imagesy($logoGd)
+                    );
+                    imagedestroy($logoGd);
+                }
+            }
+        }
+
+        return $im;
+    }
+
     public function addQrcode(array $input_data, array $data_to_db, string $data_to_qrcode): void {
         $options = $this->setOptions($input_data);
 
@@ -205,14 +559,8 @@ class Qrcode {
 
         $payload = urldecode($data_to_qrcode);
 
-        // Render QR Code using Endroid QrCode if available
-        if (class_exists(Builder::class)) {
-            $writer = match ($fileExt) {
-                'svg'   => new SvgWriter(),
-                'webp'  => new WebPWriter(),
-                default => new PngWriter()
-            };
-
+        // Render QR Code using Endroid QrCode
+        if (class_exists(EndroidQrCode::class)) {
             $eccEnum = match ($eccLevelChoice) {
                 'L'     => ErrorCorrectionLevel::Low,
                 'Q'     => ErrorCorrectionLevel::Quartile,
@@ -231,33 +579,126 @@ class Qrcode {
             $bg = $this->hexToRgb($options['background'], ['r' => 255, 'g' => 255, 'b' => 255]);
 
             try {
-                $builder = Builder::create()
-                    ->writer($writer)
-                    ->data($payload)
-                    ->encoding(new Encoding('UTF-8'))
-                    ->errorCorrectionLevel($eccEnum)
-                    ->size($options['size'])
-                    ->margin(10)
-                    ->roundBlockSizeMode($roundBlockEnum)
-                    ->foregroundColor(new Color($fg['r'], $fg['g'], $fg['b']))
-                    ->backgroundColor(new Color($bg['r'], $bg['g'], $bg['b']));
-
-                if ($logoPath !== null && file_exists($logoPath)) {
-                    $logoWidth = (int)round($options['size'] * $options['logoScale']);
-                    $builder->logoPath($logoPath)
-                            ->logoResizeToWidth($logoWidth)
-                            ->logoPunchoutBackground(true);
-                }
-
-                $result = $builder->build();
-
-                // Ensure directory exists
                 $dir = dirname($filename);
                 if (!is_dir($dir)) {
                     @mkdir($dir, 0755, true);
                 }
 
-                $result->saveToFile($filename);
+                if ($fileExt === 'svg') {
+                    $writer = new SvgWriter();
+                    $qrCode = new EndroidQrCode(
+                        data: $payload,
+                        encoding: new Encoding('UTF-8'),
+                        errorCorrectionLevel: $eccEnum,
+                        size: $options['size'],
+                        margin: 10,
+                        roundBlockSizeMode: $roundBlockEnum,
+                        foregroundColor: new Color($fg['r'], $fg['g'], $fg['b']),
+                        backgroundColor: new Color($bg['r'], $bg['g'], $bg['b'])
+                    );
+
+                    $logo = null;
+                    if ($logoPath !== null && file_exists($logoPath) && class_exists(Logo::class)) {
+                        $logoWidth = (int)round($options['size'] * $options['logoScale']);
+                        $logo = new Logo(
+                            path: $logoPath,
+                            resizeToWidth: $logoWidth,
+                            resizeToHeight: $logoWidth,
+                            punchoutBackground: ($options['logoShape'] !== 'none')
+                        );
+                    }
+
+                    $result = $writer->write($qrCode, $logo);
+                    $svgContent = $result->getString();
+
+                    if ($options['gradientType'] !== 'none') {
+                        $c1 = $this->hexToRgb($options['foreground']);
+                        $c2 = $this->hexToRgb($options['gradientColor']);
+                        $midR = (int)round(($c1['r'] + $c2['r']) / 2);
+                        $midG = (int)round(($c1['g'] + $c2['g']) / 2);
+                        $midB = (int)round(($c1['b'] + $c2['b']) / 2);
+                        $midHex = sprintf('#%02x%02x%02x', $midR, $midG, $midB);
+
+                        $fgHex = '#' . $options['foreground'];
+                        $gHex = '#' . $options['gradientColor'];
+
+                        if ($options['gradientType'] === 'radial') {
+                            $gradDef = '<defs><radialGradient id="qr-grad" cx="50%" cy="50%" r="70%">'
+                                     . '<stop offset="0%" stop-color="' . $fgHex . '"/>'
+                                     . '<stop offset="' . $options['gradientBalance'] . '%" stop-color="' . $midHex . '"/>'
+                                     . '<stop offset="100%" stop-color="' . $gHex . '"/>'
+                                     . '</radialGradient></defs>';
+                        } else {
+                            $angle = $options['gradientAngle'];
+                            $gradDef = '<defs><linearGradient id="qr-grad" x1="0%" y1="50%" x2="100%" y2="50%" gradientTransform="rotate(' . $angle . ', 0.5, 0.5)">'
+                                     . '<stop offset="0%" stop-color="' . $fgHex . '"/>'
+                                     . '<stop offset="' . $options['gradientBalance'] . '%" stop-color="' . $midHex . '"/>'
+                                     . '<stop offset="100%" stop-color="' . $gHex . '"/>'
+                                     . '</linearGradient></defs>';
+                        }
+
+                        $svgContent = preg_replace('/(<svg[^>]*>)/i', '$1' . $gradDef, $svgContent, 1);
+                        $svgContent = str_ireplace('fill="' . $fgHex . '"', 'fill="url(#qr-grad)"', $svgContent);
+                    }
+
+                    if (in_array($options['roundBlock'], ['shrink', 'dots'], true)) {
+                        $svgContent = preg_replace('/(<rect\b(?![^>]*\bid=)(?![^>]*\brx=)[^>]*)(>)/i', '$1 rx="40%" ry="40%"$2', $svgContent);
+                    } elseif ($options['roundBlock'] === 'rounded') {
+                        $svgContent = preg_replace('/(<rect\b(?![^>]*\bid=)(?![^>]*\brx=)[^>]*)(>)/i', '$1 rx="25%" ry="25%"$2', $svgContent);
+                    }
+
+                    if ($options['logoShape'] === 'circle') {
+                        $punchRadius = ($options['size'] * $options['logoScale'] / 2) + 6;
+                        $punchDef = '<circle cx="' . ($options['size'] / 2) . '" cy="' . ($options['size'] / 2) . '" r="' . $punchRadius . '" fill="#' . $options['background'] . '"/>';
+                        $svgContent = preg_replace('/(<image\b)/i', $punchDef . '$1', $svgContent, 1);
+                    } elseif ($options['logoShape'] === 'rounded') {
+                        $dim = ($options['size'] * $options['logoScale']) + 12;
+                        $pX = ($options['size'] - $dim) / 2;
+                        $pY = ($options['size'] - $dim) / 2;
+                        $punchDef = '<rect x="' . $pX . '" y="' . $pY . '" width="' . $dim . '" height="' . $dim . '" rx="8" ry="8" fill="#' . $options['background'] . '"/>';
+                        $svgContent = preg_replace('/(<image\b)/i', $punchDef . '$1', $svgContent, 1);
+                    }
+
+                    file_put_contents($filename, $svgContent);
+                } else {
+                    $writer = new PngWriter();
+                    $qrCode = new EndroidQrCode(
+                        data: $payload,
+                        encoding: new Encoding('UTF-8'),
+                        errorCorrectionLevel: $eccEnum,
+                        size: $options['size'],
+                        margin: 10,
+                        roundBlockSizeMode: $roundBlockEnum,
+                        foregroundColor: new Color(0, 0, 0),
+                        backgroundColor: new Color(255, 255, 255)
+                    );
+
+                    $result = $writer->write($qrCode);
+                    $rawIm = @imagecreatefromstring($result->getString());
+                    if ($rawIm === false) {
+                        throw new \RuntimeException("Failed to initialize GD image from generated QR data.");
+                    }
+
+                    // Convert palette-based PNG from Endroid to a genuine TrueColor GD image
+                    $w = imagesx($rawIm);
+                    $h = imagesy($rawIm);
+                    $im = imagecreatetruecolor($w, $h);
+                    imagecopy($im, $rawIm, 0, 0, 0, 0, $w, $h);
+                    imagedestroy($rawIm);
+
+                    $im = $this->applyRasterStyling($im, $options, $logoPath);
+
+                    $saved = match ($fileExt) {
+                        'webp'        => function_exists('imagewebp') ? imagewebp($im, $filename, 95) : imagepng($im, $filename, 9),
+                        'jpg', 'jpeg' => imagejpeg($im, $filename, 95),
+                        default       => imagepng($im, $filename, 9)
+                    };
+                    imagedestroy($im);
+
+                    if (!$saved) {
+                        throw new \RuntimeException("Failed to save final QR image to " . $filename);
+                    }
+                }
             } catch (Throwable $e) {
                 $this->failure("Error generating QR code: " . $e->getMessage());
             }

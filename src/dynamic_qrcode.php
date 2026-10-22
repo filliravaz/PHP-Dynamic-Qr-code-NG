@@ -120,7 +120,7 @@ if($_SERVER["REQUEST_METHOD"] === "POST") {
 
 <!-- Footer and scripts -->
 <?php include './includes/footer.php'; ?>
-<script src="dist/js/qr-preview.js"></script>
+<script src="dist/js/qr-preview.js?v=<?php echo time(); ?>"></script>
 
 <!-- Page script -->
 <script type="text/javascript">
@@ -148,7 +148,7 @@ $(document).ready(function(){
         $('.my-colorpicker2').colorpicker()
 
         $('.my-colorpicker2').on('colorpickerChange', function(event) {
-            $('.my-colorpicker2 .fa-square').css('color', event.color.toString());
+            $(this).find('.fa-square').css('color', event.color.toString());
         });
 
     })

@@ -811,6 +811,7 @@ class StaticQrcode {
 
         if(isset($_POST['preset_logo']))
             $input_data["preset_logo"] = $_POST['preset_logo'];
+        foreach(['logo_shape','gradient_type','gradient_color','gradient_angle','gradient_balance','gradient_direction','custom_eyes_enabled','eye_outer','eye_inner'] as $k) { if(isset($_POST[$k])) $input_data[$k] = $_POST[$k]; }
 
         $input_data["foreground"] = $_POST['foreground'];
         $input_data["background"] = $_POST['background'];

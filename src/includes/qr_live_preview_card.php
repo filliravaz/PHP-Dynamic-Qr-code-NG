@@ -1,3 +1,6 @@
+<?php
+$isDynamic = !empty($isDynamicQr) || (isset($_SERVER['PHP_SELF']) && basename($_SERVER['PHP_SELF']) === 'dynamic_qrcode.php') || (isset($_SERVER['SCRIPT_NAME']) && basename($_SERVER['SCRIPT_NAME']) === 'dynamic_qrcode.php');
+?>
 <div class="card card-outline card-primary sticky-top qr-preview-card" style="top: 75px; z-index: 10;">
     <div class="card-header py-2">
         <h3 class="card-title text-sm font-weight-bold"><i class="fas fa-eye mr-2"></i>Live QR Preview</h3>
@@ -9,6 +12,14 @@
         <div class="qr-preview-container d-flex justify-content-center align-items-center mb-3" style="min-height: 250px; background: repeating-conic-gradient(#f1f3f5 0% 25%, #e9ecef 0% 50%) 50% / 20px 20px; border-radius: 8px; padding: 16px; border: 1px dashed #ced4da;">
             <canvas id="qr-preview-canvas" width="220" height="220" style="max-width: 100%; height: auto; box-shadow: 0 4px 14px rgba(0,0,0,0.12); border-radius: 6px; background: #ffffff;"></canvas>
         </div>
+
+        <?php if ($isDynamic): ?>
+        <div class="alert alert-warning py-2 px-3 text-left small mb-3 border-0" style="font-size: 11.5px; border-left: 4px solid #ffc107 !important; background-color: rgba(255, 193, 7, 0.15);">
+            <i class="fas fa-exclamation-triangle mr-1 text-warning"></i>
+            <strong>Disclaimer:</strong> This QR code may differ from the finished (the final generated QR code will encode an auto-generated slug to the integrated shortener).
+        </div>
+        <?php endif; ?>
+
         <div class="preview-details text-left text-muted small border-top pt-2">
             <div class="d-flex justify-content-between mb-1">
                 <span><i class="fas fa-expand mr-1"></i> Target Resolution:</span>
