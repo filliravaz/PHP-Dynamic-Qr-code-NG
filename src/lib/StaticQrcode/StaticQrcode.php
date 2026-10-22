@@ -5,10 +5,8 @@ require_once BASE_PATH . '/lib/vCard/vCard.php';
 
 if (QRCODE_GENERATOR === "external-api.qrserver.com") {
     require_once BASE_PATH . '/lib/Qrcode/Qrcode.php';
-}
-
-if (QRCODE_GENERATOR === "internal-chillerlan.qrcode") {
-    require_once BASE_PATH . '/lib/Qrcode/Qrcode-intchil.php';
+} else {
+    require_once BASE_PATH . '/lib/Qrcode/Qrcode-endroid.php';
 }
 
 class StaticQrcode {
@@ -422,6 +420,358 @@ class StaticQrcode {
             $this->requiredFieldsError();
     }
 
+    /**
+     * create a qr code of type "telegram"
+     */
+    public function telegramQrcode($username, $message = '')
+    {
+        $cleanUser = ltrim(trim($username), '@');
+        if (!empty($cleanUser)) {
+            $url = 'https://t.me/' . $cleanUser;
+            if (!empty($message)) {
+                $url .= '?text=' . urlencode(trim($message));
+            }
+            $this->sData = $url;
+            $this->sContent = '<strong>Telegram Username:</strong> @' . htmlspecialchars($cleanUser, ENT_QUOTES, 'UTF-8');
+            if (!empty($message)) {
+                $this->sContent .= '<br><strong>Message:</strong> ' . htmlspecialchars($message, ENT_QUOTES, 'UTF-8');
+            }
+            $this->addQrcode("telegram");
+        } else {
+            $this->requiredFieldsError();
+        }
+    }
+
+    /**
+     * create a qr code of type "social" (YouTube, Instagram, LinkedIn, X, TikTok)
+     */
+    public function socialQrcode($platform, $username, $custom_url = '')
+    {
+        $platform = strtolower(trim($platform));
+        $username = trim($username);
+        $custom_url = trim($custom_url);
+
+        $url = '';
+        if (!empty($custom_url)) {
+            $url = $custom_url;
+        } else if (!empty($username)) {
+            $cleanUser = ltrim($username, '@');
+            switch ($platform) {
+                case 'youtube':
+                    $url = 'https://youtube.com/@' . $cleanUser;
+                    break;
+                case 'instagram':
+                    $url = 'https://instagram.com/' . $cleanUser;
+                    break;
+                case 'linkedin':
+                    $url = 'https://linkedin.com/in/' . $cleanUser;
+                    break;
+                case 'twitter':
+                case 'x':
+                    $url = 'https://x.com/' . $cleanUser;
+                    break;
+                case 'tiktok':
+                    $url = 'https://tiktok.com/@' . $cleanUser;
+                    break;
+                default:
+                    $url = 'https://' . $cleanUser;
+                    break;
+            }
+        }
+
+        if (!empty($url)) {
+            $this->sData = $url;
+            $this->sContent = '<strong>Platform:</strong> ' . htmlspecialchars(ucfirst($platform), ENT_QUOTES, 'UTF-8') . '<br>' .
+                              '<strong>Profile / Target:</strong> ' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
+            $this->addQrcode("social");
+        } else {
+            $this->requiredFieldsError();
+        }
+    }
+
+    /**
+     * create a qr code of type "crypto" (Ethereum, Solana, Monero)
+     */
+    public function cryptoQrcode($currency, $address, $amount = '', $message = '')
+    {
+        $currency = strtolower(trim($currency));
+        $address = trim($address);
+        $amount = trim($amount);
+        $message = trim($message);
+
+        if (!empty($address)) {
+            switch ($currency) {
+                case 'ethereum':
+                case 'eth':
+                    $data = 'ethereum:' . $address;
+                    $params = [];
+                    if (!empty($amount)) $params['value'] = $amount;
+                    if (!empty($message)) $params['message'] = $message;
+                    if (!empty($params)) $data .= '?' . http_build_query($params);
+                    break;
+
+                case 'solana':
+                case 'sol':
+                    $data = 'solana:' . $address;
+                    $params = [];
+                    if (!empty($amount)) $params['amount'] = $amount;
+                    if (!empty($message)) $params['message'] = $message;
+                    if (!empty($params)) $data .= '?' . http_build_query($params);
+                    break;
+
+                case 'monero':
+                case 'xmr':
+                    $data = 'monero:' . $address;
+                    $params = [];
+                    if (!empty($amount)) $params['tx_amount'] = $amount;
+                    if (!empty($message)) $params['tx_description'] = $message;
+                    if (!empty($params)) $data .= '?' . http_build_query($params);
+                    break;
+
+                default:
+                    $data = $address;
+                    break;
+            }
+
+            $this->sData = $data;
+            $this->sContent = '<strong>Cryptocurrency:</strong> ' . htmlspecialchars(strtoupper($currency), ENT_QUOTES, 'UTF-8') . '<br>' .
+                              '<strong>Address:</strong> ' . htmlspecialchars($address, ENT_QUOTES, 'UTF-8');
+            if (!empty($amount)) {
+                $this->sContent .= '<br><strong>Amount:</strong> ' . htmlspecialchars($amount, ENT_QUOTES, 'UTF-8');
+            }
+            if (!empty($message)) {
+                $this->sContent .= '<br><strong>Message:</strong> ' . htmlspecialchars($message, ENT_QUOTES, 'UTF-8');
+            }
+            $this->addQrcode("crypto");
+        } else {
+            $this->requiredFieldsError();
+        }
+    }
+
+    /**
+     * create a qr code of type "sepa" (EPC standard)
+     */
+    public function sepaQrcode($name, $iban, $bic = '', $amount = '', $remittance = '')
+    {
+        $name = trim($name);
+        $iban = strtoupper(str_replace(' ', '', trim($iban)));
+        $bic = strtoupper(trim($bic));
+        $amount = trim($amount);
+        $remittance = trim($remittance);
+
+        if (!empty($name) && !empty($iban)) {
+            $formattedAmount = '';
+            if (!empty($amount)) {
+                $num = number_format((float)str_replace(',', '.', $amount), 2, '.', '');
+                $formattedAmount = 'EUR' . $num;
+            }
+
+            // EPC069-08 Quick Response Code Guidelines
+            $lines = [
+                'BCD',
+                '002',
+                '1',
+                'SCT',
+                $bic,
+                mb_substr($name, 0, 70),
+                $iban,
+                $formattedAmount,
+                '',
+                mb_substr($remittance, 0, 140),
+                '',
+                ''
+            ];
+
+            $this->sData = implode("\n", $lines);
+            $this->sContent = '<strong>Beneficiary:</strong> ' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . '<br>' .
+                              '<strong>IBAN:</strong> ' . htmlspecialchars($iban, ENT_QUOTES, 'UTF-8');
+            if (!empty($bic)) {
+                $this->sContent .= '<br><strong>BIC:</strong> ' . htmlspecialchars($bic, ENT_QUOTES, 'UTF-8');
+            }
+            if (!empty($amount)) {
+                $this->sContent .= '<br><strong>Amount:</strong> ' . htmlspecialchars($formattedAmount, ENT_QUOTES, 'UTF-8');
+            }
+            if (!empty($remittance)) {
+                $this->sContent .= '<br><strong>Remittance:</strong> ' . htmlspecialchars($remittance, ENT_QUOTES, 'UTF-8');
+            }
+
+            $this->addQrcode("sepa");
+        } else {
+            $this->requiredFieldsError();
+        }
+    }
+
+    /**
+     * Helper for EMV TLV (Type-Length-Value) string construction
+     */
+    private function emvTlv(string $id, string $value): string {
+        return sprintf('%02s%02d%s', $id, strlen($value), $value);
+    }
+
+    /**
+     * Compute CRC16-CCITT (polynomial 0x1021, init 0xFFFF)
+     */
+    private function computeCrc16(string $data): string {
+        $crc = 0xFFFF;
+        $len = strlen($data);
+        for ($i = 0; $i < $len; $i++) {
+            $crc ^= (ord($data[$i]) << 8);
+            for ($j = 0; $j < 8; $j++) {
+                if ($crc & 0x8000) {
+                    $crc = (($crc << 1) ^ 0x1021) & 0xFFFF;
+                } else {
+                    $crc = ($crc << 1) & 0xFFFF;
+                }
+            }
+        }
+        return strtoupper(sprintf('%04X', $crc));
+    }
+
+    /**
+     * create a qr code of type "pix" (Brazilian Instant Payments EMV standard)
+     */
+    public function pixQrcode($pix_key, $merchant_name, $merchant_city, $amount = '', $txid = '')
+    {
+        $pix_key = trim($pix_key);
+        $merchant_name = trim($merchant_name);
+        $merchant_city = trim($merchant_city);
+        $amount = trim($amount);
+        $txid = trim($txid) ?: '***';
+
+        if (!empty($pix_key) && !empty($merchant_name) && !empty($merchant_city)) {
+            // Field 26: Merchant Account Information
+            $field26 = $this->emvTlv('00', 'br.gov.bcb.pix') . $this->emvTlv('01', $pix_key);
+
+            $payload = $this->emvTlv('00', '01') .                     // Format Indicator
+                       $this->emvTlv('01', '12') .                     // Point of Initiation Method
+                       $this->emvTlv('26', $field26) .                 // Merchant Account Information
+                       $this->emvTlv('52', '0000') .                   // Merchant Category Code
+                       $this->emvTlv('53', '986');                     // Currency BRL
+
+            if (!empty($amount) && (float)$amount > 0) {
+                $payload .= $this->emvTlv('54', number_format((float)str_replace(',', '.', $amount), 2, '.', ''));
+            }
+
+            $cleanName = mb_substr(preg_replace('/[^A-Za-z0-9 ]/', '', $merchant_name), 0, 25);
+            $cleanCity = mb_substr(preg_replace('/[^A-Za-z0-9 ]/', '', $merchant_city), 0, 15);
+
+            $payload .= $this->emvTlv('58', 'BR') .                    // Country Code
+                        $this->emvTlv('59', $cleanName) .              // Merchant Name
+                        $this->emvTlv('60', $cleanCity);               // Merchant City
+
+            // Additional Data Field (txid)
+            $payload .= $this->emvTlv('62', $this->emvTlv('05', $txid));
+
+            // Append CRC placeholder then compute checksum
+            $payloadWithoutCrc = $payload . '6304';
+            $crc = $this->computeCrc16($payloadWithoutCrc);
+            $finalPixPayload = $payloadWithoutCrc . $crc;
+
+            $this->sData = $finalPixPayload;
+            $this->sContent = '<strong>Pix Key:</strong> ' . htmlspecialchars($pix_key, ENT_QUOTES, 'UTF-8') . '<br>' .
+                              '<strong>Name:</strong> ' . htmlspecialchars($merchant_name, ENT_QUOTES, 'UTF-8') . '<br>' .
+                              '<strong>City:</strong> ' . htmlspecialchars($merchant_city, ENT_QUOTES, 'UTF-8');
+            if (!empty($amount)) {
+                $this->sContent .= '<br><strong>Amount:</strong> R$ ' . htmlspecialchars($amount, ENT_QUOTES, 'UTF-8');
+            }
+            if ($txid !== '***') {
+                $this->sContent .= '<br><strong>TxID:</strong> ' . htmlspecialchars($txid, ENT_QUOTES, 'UTF-8');
+            }
+
+            $this->addQrcode("pix");
+        } else {
+            $this->requiredFieldsError();
+        }
+    }
+
+    /**
+     * create a qr code of type "meeting" (Zoom, Teams, FaceTime)
+     */
+    public function meetingQrcode($platform, $meeting_id, $password = '', $url = '')
+    {
+        $platform = strtolower(trim($platform));
+        $meeting_id = trim($meeting_id);
+        $password = trim($password);
+        $url = trim($url);
+
+        $targetUrl = '';
+        if (!empty($url)) {
+            $targetUrl = $url;
+        } else if ($platform === 'zoom' && !empty($meeting_id)) {
+            $targetUrl = 'https://zoom.us/j/' . preg_replace('/[^0-9]/', '', $meeting_id);
+            if (!empty($password)) {
+                $targetUrl .= '?pwd=' . urlencode($password);
+            }
+        } else if ($platform === 'facetime' && !empty($meeting_id)) {
+            $targetUrl = 'facetime:' . $meeting_id;
+        } else if (!empty($meeting_id)) {
+            $targetUrl = $meeting_id;
+        }
+
+        if (!empty($targetUrl)) {
+            $this->sData = $targetUrl;
+            $this->sContent = '<strong>Meeting Platform:</strong> ' . htmlspecialchars(ucfirst($platform), ENT_QUOTES, 'UTF-8') . '<br>' .
+                              '<strong>Target / Link:</strong> ' . htmlspecialchars($targetUrl, ENT_QUOTES, 'UTF-8');
+            $this->addQrcode("meeting");
+        } else {
+            $this->requiredFieldsError();
+        }
+    }
+
+    /**
+     * create a qr code of type "mecard" (Mobile contact standard)
+     */
+    public function mecardQrcode($name, $reading = '', $tel = '', $email = '', $memo = '', $address = '', $url = '')
+    {
+        $name = trim($name);
+        if (!empty($name)) {
+            $fields = ['N:' . $name];
+            if (!empty($reading)) $fields[] = 'SOUND:' . trim($reading);
+            if (!empty($tel))     $fields[] = 'TEL:' . trim($tel);
+            if (!empty($email))   $fields[] = 'EMAIL:' . trim($email);
+            if (!empty($memo))    $fields[] = 'NOTE:' . trim($memo);
+            if (!empty($address)) $fields[] = 'ADR:' . trim($address);
+            if (!empty($url))     $fields[] = 'URL:' . trim($url);
+
+            $this->sData = 'MECARD:' . implode(';', $fields) . ';;';
+            $this->sContent = '<strong>MeCard Contact:</strong> ' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8');
+            if (!empty($tel))   $this->sContent .= '<br><strong>Tel:</strong> ' . htmlspecialchars($tel, ENT_QUOTES, 'UTF-8');
+            if (!empty($email)) $this->sContent .= '<br><strong>Email:</strong> ' . htmlspecialchars($email, ENT_QUOTES, 'UTF-8');
+            if (!empty($url))   $this->sContent .= '<br><strong>Website:</strong> ' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
+
+            $this->addQrcode("mecard");
+        } else {
+            $this->requiredFieldsError();
+        }
+    }
+
+    /**
+     * create a qr code of type "medical" (Emergency Medical ID)
+     */
+    public function medicalQrcode($name, $blood_type = '', $allergies = '', $medications = '', $emergency_contact = '', $notes = '')
+    {
+        $name = trim($name);
+        if (!empty($name)) {
+            $text = "--- EMERGENCY MEDICAL ID ---\n";
+            $text .= "Name: " . $name . "\n";
+            if (!empty($blood_type))        $text .= "Blood Type: " . trim($blood_type) . "\n";
+            if (!empty($allergies))         $text .= "Allergies: " . trim($allergies) . "\n";
+            if (!empty($medications))       $text .= "Medications: " . trim($medications) . "\n";
+            if (!empty($emergency_contact)) $text .= "Emergency Contact: " . trim($emergency_contact) . "\n";
+            if (!empty($notes))             $text .= "Notes: " . trim($notes) . "\n";
+
+            $this->sData = $text;
+            $this->sContent = '<strong>Medical ID:</strong> ' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8');
+            if (!empty($blood_type))        $this->sContent .= '<br><strong>Blood Type:</strong> ' . htmlspecialchars($blood_type, ENT_QUOTES, 'UTF-8');
+            if (!empty($allergies))         $this->sContent .= '<br><strong>Allergies:</strong> ' . htmlspecialchars($allergies, ENT_QUOTES, 'UTF-8');
+            if (!empty($emergency_contact)) $this->sContent .= '<br><strong>Emergency Contact:</strong> ' . htmlspecialchars($emergency_contact, ENT_QUOTES, 'UTF-8');
+
+            $this->addQrcode("medical");
+        } else {
+            $this->requiredFieldsError();
+        }
+    }
+
     public function getQrcode($id) {
         return $this->qrcode_instance->getQrcode($id);
     }
@@ -452,6 +802,15 @@ class StaticQrcode {
 
         if(isset($_POST['size']))
             $input_data["size"] = $_POST['size'];
+
+        if(isset($_POST['round_block']))
+            $input_data["round_block"] = $_POST['round_block'];
+
+        if(isset($_POST['logo_scale']))
+            $input_data["logo_scale"] = $_POST['logo_scale'];
+
+        if(isset($_POST['preset_logo']))
+            $input_data["preset_logo"] = $_POST['preset_logo'];
 
         $input_data["foreground"] = $_POST['foreground'];
         $input_data["background"] = $_POST['background'];

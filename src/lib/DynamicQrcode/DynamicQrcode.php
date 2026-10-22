@@ -3,10 +3,8 @@ require_once 'config/config.php';
 
 if (QRCODE_GENERATOR === "external-api.qrserver.com") {
     require_once BASE_PATH . '/lib/Qrcode/Qrcode.php';
-}
-
-if (QRCODE_GENERATOR === "internal-chillerlan.qrcode") {
-    require_once BASE_PATH . '/lib/Qrcode/Qrcode-intchil.php';
+} else {
+    require_once BASE_PATH . '/lib/Qrcode/Qrcode-endroid.php';
 }
 
 

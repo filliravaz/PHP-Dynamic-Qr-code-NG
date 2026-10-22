@@ -87,23 +87,32 @@ if($_SERVER["REQUEST_METHOD"] === "POST") {
     <!-- Main content -->
     <section class="content">
         <div class="container-fluid">
-            <div class="card card-primary">
-                <div class="card-header">
-                    <h3 class="card-title">Enter the requested data</h3>
+            <div class="row">
+                <div class="<?php echo $edit ? 'col-12' : 'col-xl-8 col-lg-7'; ?>">
+                    <div class="card card-primary card-outline">
+                        <div class="card-header">
+                            <h3 class="card-title font-weight-bold"><i class="fas fa-qrcode mr-2"></i><?php echo ($edit) ? "Edit Dynamic QR Code" : "Dynamic QR Code Configuration"; ?></h3>
+                        </div>
+                        <form class="form" action="" method="post" id="dynamic_form" enctype="multipart/form-data">
+                            <div class="card-body">
+                                <?php
+                                    if($edit)
+                                        include BASE_PATH.'/forms/form_dynamic_edit.php';
+                                    else
+                                        include BASE_PATH . '/forms/form_dynamic_add.php';
+                                ?>
+                            </div>
+                            <div class="card-footer">
+                                <button type="submit" class="btn btn-primary"><i class="fas fa-check mr-1"></i> Submit & Generate</button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
-                <form class="form" action="" method="post" id="dynamic_form" enctype="multipart/form-data">
-                    <div class="card-body">
-                        <?php
-                            if($edit)
-                                include BASE_PATH.'/forms/form_dynamic_edit.php';
-                            else
-                                include BASE_PATH . '/forms/form_dynamic_add.php';
-                        ?>
-                    </div>
-                    <div class="card-footer">
-                        <button type="submit" class="btn btn-primary">Submit</button>
-                    </div>
-                </form>
+                <?php if (!$edit): ?>
+                <div class="col-xl-4 col-lg-5">
+                    <?php include BASE_PATH . '/includes/qr_live_preview_card.php'; ?>
+                </div>
+                <?php endif; ?>
             </div>
         </div><!--/. container-fluid -->
     </section><!-- /.content -->
@@ -111,6 +120,7 @@ if($_SERVER["REQUEST_METHOD"] === "POST") {
 
 <!-- Footer and scripts -->
 <?php include './includes/footer.php'; ?>
+<script src="dist/js/qr-preview.js"></script>
 
 <!-- Page script -->
 <script type="text/javascript">
