@@ -661,7 +661,7 @@ class StaticQrcode {
             $formattedAmount = '';
             if (!empty($amount)) {
                 $cleanAmount = str_replace(',', '.', $amount);
-                if (!preg_match('/^(?:0|[1-9]\d*)(?:\.\d+)?$/', $cleanAmount)) {
+                if (!preg_match('/^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/', $cleanAmount)) {
                     $this->failure('Invalid amount provided.');
                 }
                 $val = (float)$cleanAmount;
@@ -776,7 +776,7 @@ class StaticQrcode {
 
             if (!empty($amount)) {
                 $cleanAmount = str_replace(',', '.', $amount);
-                if (!preg_match('/^(?:0|[1-9]\d*)(?:\.\d+)?$/', $cleanAmount) || (float)$cleanAmount <= 0) {
+                if (!preg_match('/^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/', $cleanAmount) || (float)$cleanAmount <= 0) {
                     $this->failure('Invalid amount provided.');
                 }
                 $payload .= $this->emvTlv('54', number_format((float)$cleanAmount, 2, '.', ''));

@@ -532,6 +532,9 @@ class Qrcode {
         if ($format === 'gif' || $format === 'eps') {
             $format = 'png';
         }
+        if ($format === 'webp' && !function_exists('imagewebp')) {
+            $format = 'png';
+        }
         if (!in_array($format, $allowedFormats, true)) {
             $this->failure("Invalid image format requested.");
         }
