@@ -212,46 +212,63 @@ class Qrcode {
      */
     private function resolveLogoPath(): ?string {
         // 1. Check custom uploaded file
-        if (isset($_FILES['logo_file']) && is_uploaded_file($_FILES['logo_file']['tmp_name'])) {
-            $file = $_FILES['logo_file'];
-            if ($file['error'] !== UPLOAD_ERR_OK || $file['size'] <= 0 || $file['size'] > 5 * 1024 * 1024) {
-                $this->failure('Uploaded logo file is invalid or exceeds the maximum allowed file size of 5MB.');
-            }
+        if (isset($_FILES['logo_file']) && is_array($_FILES['logo_file']) && isset($_FILES['logo_file']['error'])) {
+            $error = $_FILES['logo_file']['error'];
+            if ($error !== UPLOAD_ERR_NO_FILE) {
+                if ($error !== UPLOAD_ERR_OK) {
+                    $message = match ($error) {
+                        UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => 'Uploaded logo exceeds the maximum allowed file size limit.',
+                        UPLOAD_ERR_PARTIAL                        => 'Logo file was only partially uploaded.',
+                        UPLOAD_ERR_NO_TMP_DIR                     => 'Missing temporary upload directory.',
+                        UPLOAD_ERR_CANT_WRITE                     => 'Failed to write uploaded logo to disk.',
+                        UPLOAD_ERR_EXTENSION                      => 'A PHP extension stopped the file upload.',
+                        default                                   => 'Failed to upload logo file (error code: ' . $error . ').',
+                    };
+                    $this->failure($message);
+                }
 
-            $finfo = new finfo(FILEINFO_MIME_TYPE);
-            $mime = $finfo->file($file['tmp_name']);
-            $allowed = ['image/png', 'image/jpeg', 'image/webp'];
-            if (!in_array($mime, $allowed, true)) {
-                $this->failure('Uploaded logo must be a PNG, JPEG, or WebP image.');
-            }
+                $file = $_FILES['logo_file'];
+                if (!is_uploaded_file($file['tmp_name']) || $file['size'] <= 0 || $file['size'] > 5 * 1024 * 1024) {
+                    $this->failure('Uploaded logo file is invalid or exceeds the maximum allowed file size of 5MB.');
+                }
 
-            $imgInfo = @getimagesize($file['tmp_name']);
-            if ($imgInfo === false || empty($imgInfo[0]) || empty($imgInfo[1])) {
-                $this->failure('Uploaded logo is not a valid image or cannot be decoded.');
-            }
+                $finfo = new finfo(FILEINFO_MIME_TYPE);
+                $mime = $finfo->file($file['tmp_name']);
+                $allowed = ['image/png', 'image/jpeg', 'image/webp'];
+                if (!in_array($mime, $allowed, true)) {
+                    $this->failure('Uploaded logo must be a PNG, JPEG, or WebP image.');
+                }
 
-            $width = (int)$imgInfo[0];
-            $height = (int)$imgInfo[1];
-            $maxDimension = 2000;
-            if ($width > $maxDimension || $height > $maxDimension) {
-                $this->failure('Uploaded logo dimensions exceed the maximum allowed limit of ' . $maxDimension . 'x' . $maxDimension . ' pixels.');
-            }
+                $imgInfo = @getimagesize($file['tmp_name']);
+                if ($imgInfo === false || empty($imgInfo[0]) || empty($imgInfo[1])) {
+                    $this->failure('Uploaded logo is not a valid image or cannot be decoded.');
+                }
 
-            $logosDir = SAVED_QRCODE_DIRECTORY . 'logos/';
-            if (!is_dir($logosDir)) {
-                @mkdir($logosDir, 0755, true);
-            }
-            $ext = match ($mime) {
-                'image/png'     => 'png',
-                'image/jpeg'    => 'jpg',
-                'image/webp'    => 'webp',
-                default         => 'png'
-            };
-            $targetName = 'logo_' . bin2hex(random_bytes(8)) . '.' . $ext;
-            $targetPath = $logosDir . $targetName;
-            if (move_uploaded_file($file['tmp_name'], $targetPath)) {
-                $this->uploadedLogoPath = $targetPath;
-                return $targetPath;
+                $width = (int)$imgInfo[0];
+                $height = (int)$imgInfo[1];
+                $maxDimension = 2000;
+                if ($width > $maxDimension || $height > $maxDimension) {
+                    $this->failure('Uploaded logo dimensions exceed the maximum allowed limit of ' . $maxDimension . 'x' . $maxDimension . ' pixels.');
+                }
+
+                $logosDir = SAVED_QRCODE_DIRECTORY . 'logos/';
+                if (!is_dir($logosDir)) {
+                    @mkdir($logosDir, 0755, true);
+                }
+                $ext = match ($mime) {
+                    'image/png'     => 'png',
+                    'image/jpeg'    => 'jpg',
+                    'image/webp'    => 'webp',
+                    default         => 'png'
+                };
+                $targetName = 'logo_' . bin2hex(random_bytes(8)) . '.' . $ext;
+                $targetPath = $logosDir . $targetName;
+                if (move_uploaded_file($file['tmp_name'], $targetPath)) {
+                    $this->uploadedLogoPath = $targetPath;
+                    return $targetPath;
+                }
+
+                $this->failure('Failed to save uploaded logo file.');
             }
         }
 
