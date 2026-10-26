@@ -206,33 +206,52 @@ class Qrcode {
 
     /**
      * Resolves logo file path from uploaded file or preset name.
+     * Validates file size, MIME type, and decoded dimensions to prevent decompression bombs.
+     *
+     * @return string|null Path to the validated logo file or null if none provided.
      */
     private function resolveLogoPath(): ?string {
         // 1. Check custom uploaded file
         if (isset($_FILES['logo_file']) && is_uploaded_file($_FILES['logo_file']['tmp_name'])) {
             $file = $_FILES['logo_file'];
-            if ($file['error'] === UPLOAD_ERR_OK && $file['size'] > 0 && $file['size'] <= 5 * 1024 * 1024) {
-                $finfo = new finfo(FILEINFO_MIME_TYPE);
-                $mime = $finfo->file($file['tmp_name']);
-                $allowed = ['image/png', 'image/jpeg', 'image/webp'];
-                if (in_array($mime, $allowed, true)) {
-                    $logosDir = SAVED_QRCODE_DIRECTORY . 'logos/';
-                    if (!is_dir($logosDir)) {
-                        @mkdir($logosDir, 0755, true);
-                    }
-                    $ext = match ($mime) {
-                        'image/png'     => 'png',
-                        'image/jpeg'    => 'jpg',
-                        'image/webp'    => 'webp',
-                        default         => 'png'
-                    };
-                    $targetName = 'logo_' . bin2hex(random_bytes(8)) . '.' . $ext;
-                    $targetPath = $logosDir . $targetName;
-                    if (move_uploaded_file($file['tmp_name'], $targetPath)) {
-                        $this->uploadedLogoPath = $targetPath;
-                        return $targetPath;
-                    }
-                }
+            if ($file['error'] !== UPLOAD_ERR_OK || $file['size'] <= 0 || $file['size'] > 5 * 1024 * 1024) {
+                $this->failure('Uploaded logo file is invalid or exceeds the maximum allowed file size of 5MB.');
+            }
+
+            $finfo = new finfo(FILEINFO_MIME_TYPE);
+            $mime = $finfo->file($file['tmp_name']);
+            $allowed = ['image/png', 'image/jpeg', 'image/webp'];
+            if (!in_array($mime, $allowed, true)) {
+                $this->failure('Uploaded logo must be a PNG, JPEG, or WebP image.');
+            }
+
+            $imgInfo = @getimagesize($file['tmp_name']);
+            if ($imgInfo === false || empty($imgInfo[0]) || empty($imgInfo[1])) {
+                $this->failure('Uploaded logo is not a valid image or cannot be decoded.');
+            }
+
+            $width = (int)$imgInfo[0];
+            $height = (int)$imgInfo[1];
+            $maxDimension = 2000;
+            if ($width > $maxDimension || $height > $maxDimension) {
+                $this->failure('Uploaded logo dimensions exceed the maximum allowed limit of ' . $maxDimension . 'x' . $maxDimension . ' pixels.');
+            }
+
+            $logosDir = SAVED_QRCODE_DIRECTORY . 'logos/';
+            if (!is_dir($logosDir)) {
+                @mkdir($logosDir, 0755, true);
+            }
+            $ext = match ($mime) {
+                'image/png'     => 'png',
+                'image/jpeg'    => 'jpg',
+                'image/webp'    => 'webp',
+                default         => 'png'
+            };
+            $targetName = 'logo_' . bin2hex(random_bytes(8)) . '.' . $ext;
+            $targetPath = $logosDir . $targetName;
+            if (move_uploaded_file($file['tmp_name'], $targetPath)) {
+                $this->uploadedLogoPath = $targetPath;
+                return $targetPath;
             }
         }
 
@@ -550,23 +569,28 @@ class Qrcode {
 
             $logoData = @file_get_contents($effectiveLogoPath);
             if ($logoData !== false) {
-                $logoGd = @imagecreatefromstring($logoData);
-                if ($logoGd !== false) {
-                    imagealphablending($im, true);
-                    imagesavealpha($im, true);
-                    imagecopyresampled(
-                        $im,
-                        $logoGd,
-                        $logoX,
-                        $logoY,
-                        0,
-                        0,
-                        $logoPixelSize,
-                        $logoPixelSize,
-                        imagesx($logoGd),
-                        imagesy($logoGd)
-                    );
-                    imagedestroy($logoGd);
+                $imgInfo = @getimagesizefromstring($logoData);
+                if ($imgInfo !== false && !empty($imgInfo[0]) && !empty($imgInfo[1])) {
+                    if ((int)$imgInfo[0] <= 2000 && (int)$imgInfo[1] <= 2000) {
+                        $logoGd = @imagecreatefromstring($logoData);
+                        if ($logoGd !== false) {
+                            imagealphablending($im, true);
+                            imagesavealpha($im, true);
+                            imagecopyresampled(
+                                $im,
+                                $logoGd,
+                                $logoX,
+                                $logoY,
+                                0,
+                                0,
+                                $logoPixelSize,
+                                $logoPixelSize,
+                                imagesx($logoGd),
+                                imagesy($logoGd)
+                            );
+                            imagedestroy($logoGd);
+                        }
+                    }
                 }
             }
         }

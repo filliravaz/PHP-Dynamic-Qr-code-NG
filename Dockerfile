@@ -60,7 +60,13 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update -q \
     esac \
     && install-php-extensions $PHP_EXTENSIONS \
     && a2enmod rewrite headers \
-    && sed -ri -e 's!AllowOverride None!AllowOverride All!g' /etc/apache2/apache2.conf
+    && sed -ri -e 's!AllowOverride None!AllowOverride All!g' /etc/apache2/apache2.conf \
+    && echo "LimitRequestBody 10485760" > /etc/apache2/conf-available/limits.conf \
+    && a2enconf limits \
+    && { \
+        echo "upload_max_filesize = 5M"; \
+        echo "post_max_size = 10M"; \
+    } > /usr/local/etc/php/conf.d/uploads.ini
 
 # Install Composer.
 ENV PATH=$PATH:/root/composer/vendor/bin \

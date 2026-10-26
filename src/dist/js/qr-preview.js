@@ -957,6 +957,19 @@
         $(document).on('change', '.input-logo-file', function (e) {
             var file = e.target.files && e.target.files[0];
             if (file) {
+                if (file.size > 5 * 1024 * 1024) {
+                    alert('The selected logo file exceeds the maximum allowed size of 5MB.');
+                    $(this).val('');
+                    $(this).next('.custom-file-label').text('Choose image...');
+                    return;
+                }
+                var allowedMimes = ['image/png', 'image/jpeg', 'image/webp'];
+                if (file.type && allowedMimes.indexOf(file.type.toLowerCase()) === -1) {
+                    alert('The selected logo must be a PNG, JPG, or WebP image.');
+                    $(this).val('');
+                    $(this).next('.custom-file-label').text('Choose image...');
+                    return;
+                }
                 var reader = new FileReader();
                 reader.onload = function (ev) {
                     customLogoDataUrl = ev.target.result;
