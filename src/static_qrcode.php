@@ -88,7 +88,15 @@ if($_SERVER["REQUEST_METHOD"] === "POST") {
             case 'crypto':       $static_qrcode_instance->cryptoQrcode($_POST['currency'] ?? '', $_POST['address'] ?? '', $_POST['amount'] ?? '', $_POST['message'] ?? '');
                 break;
 
-            case 'sepa':         $static_qrcode_instance->sepaQrcode($_POST['name'] ?? '', $_POST['iban'] ?? '', $_POST['bic'] ?? '', $_POST['amount'] ?? '', $_POST['remittance'] ?? '');
+            case 'sepa':
+                foreach (['name', 'iban', 'bic', 'amount', 'remittance'] as $sepaField) {
+                    if (isset($_POST[$sepaField]) && !is_scalar($_POST[$sepaField])) {
+                        $_SESSION['failure'] = 'Invalid SEPA field provided.';
+                        header('Location: static_qrcodes.php');
+                        exit();
+                    }
+                }
+                $static_qrcode_instance->sepaQrcode($_POST['name'] ?? '', $_POST['iban'] ?? '', $_POST['bic'] ?? '', $_POST['amount'] ?? '', $_POST['remittance'] ?? '');
                 break;
 
             case 'pix':          $static_qrcode_instance->pixQrcode($_POST['pix_key'] ?? '', $_POST['merchant_name'] ?? '', $_POST['merchant_city'] ?? '', $_POST['amount'] ?? '', $_POST['txid'] ?? '');
