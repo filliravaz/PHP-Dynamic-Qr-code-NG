@@ -582,6 +582,9 @@ class Qrcode {
                         }
                     } catch (\Throwable $e) {}
                 }
+                if ($effectiveLogoPath === $logoPath) {
+                    throw new \RuntimeException('Selected emblem cannot be rendered for raster output.');
+                }
             }
 
             $logoData = @file_get_contents($effectiveLogoPath);
