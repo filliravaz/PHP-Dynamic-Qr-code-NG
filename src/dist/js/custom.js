@@ -595,7 +595,16 @@
           }
         },
         error: function (err) {
-          var errorText = (err && err.responseText) ? err.responseText : 'An unexpected error occurred.';
+          var res = err.responseJSON;
+          if (!res && err.responseText) {
+            try {
+              res = JSON.parse(err.responseText);
+            } catch (e) {}
+          }
+          if (res && res.csrf_token) {
+            $('input[name=csrf_token]').val(res.csrf_token);
+          }
+          var errorText = (res && res.data) ? res.data : ((err && err.responseText) ? err.responseText : 'An unexpected error occurred.');
           var $err = $('#err-msg').empty().append('<i class="fas fa-exclamation-circle"></i> ');
           $err.append(document.createTextNode(' ' + errorText));
           $('#err-msg').css('display', 'block');

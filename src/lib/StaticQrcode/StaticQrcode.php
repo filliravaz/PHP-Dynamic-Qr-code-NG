@@ -314,16 +314,17 @@ class StaticQrcode {
     public function wifiQrcode($encryption, $ssid, $password)
     {
         if($ssid != NULL){
-            $allowedEnc = ['WPA', 'WEP', 'WPA2', 'nopass', ''];
+            $allowedEnc = ['WPA', 'WEP', 'WPA2', 'NOPASS', ''];
             $encUpper = strtoupper(trim((string)$encryption));
             if (!in_array($encUpper, $allowedEnc, true)) {
                 $encUpper = 'WPA';
             }
+            $emittedType = ($encUpper === 'NOPASS' || $encUpper === '') ? 'nopass' : $encUpper;
             $escape = function($v) {
                 return addcslashes((string)$v, ';:\"\\,');
             };
-            $this->sData = 'WIFI:T:' . $encUpper . ';S:' . $escape($ssid) . ';P:' . $escape($password) . ';;';  
-            $this->sContent = '<strong>Encryption:</strong> ' . htmlspecialchars($encUpper, ENT_QUOTES, 'UTF-8') . '<br>' .
+            $this->sData = 'WIFI:T:' . $emittedType . ';S:' . $escape($ssid) . ';P:' . $escape($password) . ';;';  
+            $this->sContent = '<strong>Encryption:</strong> ' . htmlspecialchars($emittedType, ENT_QUOTES, 'UTF-8') . '<br>' .
                               '<strong>SSID:</strong> ' . htmlspecialchars($ssid, ENT_QUOTES, 'UTF-8') . '<br>' .
                               '<strong>Password:</strong> ' . htmlspecialchars($password, ENT_QUOTES, 'UTF-8');
 
