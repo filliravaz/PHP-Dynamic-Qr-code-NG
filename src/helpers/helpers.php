@@ -422,20 +422,23 @@ function recordLoginAttempt($username, $ip) {
  * Clear recorded attempts on successful authentication.
  */
 function clearLoginAttempts($username, $ip = null) {
-    if ((!is_string($username) || trim($username) === '') && (!is_string($ip) || trim($ip) === '')) {
+    $normUser = (is_string($username) && trim($username) !== '') ? trim($username) : null;
+    $normIp = (is_string($ip) && trim($ip) !== '') ? trim($ip) : null;
+
+    if ($normUser === null && $normIp === null) {
         return;
     }
 
     if (function_exists('getDbInstance')) {
         try {
             $db = getDbInstance();
-            if (!empty($username) && is_string($username) && trim($username) !== '') {
-                $db->where('username', trim($username));
-                if (!empty($ip) && is_string($ip)) {
-                    $db->orWhere('ip_address', trim($ip));
+            if ($normUser !== null) {
+                $db->where('username', $normUser);
+                if ($normIp !== null) {
+                    $db->orWhere('ip_address', $normIp);
                 }
-            } elseif (!empty($ip) && is_string($ip)) {
-                $db->where('ip_address', trim($ip));
+            } elseif ($normIp !== null) {
+                $db->where('ip_address', $normIp);
             }
             $db->delete('login_attempts');
         } catch (\Throwable $e) {

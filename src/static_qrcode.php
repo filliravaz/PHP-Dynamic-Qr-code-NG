@@ -37,6 +37,11 @@ if($_SERVER["REQUEST_METHOD"] === "POST") {
         // CSRF token is validated above for all static QR type submissions
         // Each form template under src/forms/static/ provides a hidden csrf_token field
         $type = $_GET['type'] ?? '';
+        if (!is_string($type)) {
+            $_SESSION['failure'] = 'Invalid input provided.';
+            header('Location: static_qrcodes.php');
+            exit();
+        }
         $typeFields = [
             'text'     => ['text'],
             'email'    => ['email', 'subject', 'message'],
