@@ -47,6 +47,11 @@ class Users
      * Add user
      */
     public function addUser($input_data) {
+        $allowedTypes = ['super', 'admin'];
+        if (empty($input_data['type']) || !in_array($input_data['type'], $allowedTypes, true)) {
+            $this->failure('Invalid user type.');
+        }
+
         $db = getDbInstance();
 
         $data_to_db["username"] = $input_data["username"];
@@ -73,6 +78,15 @@ class Users
      * 
      */
     public function editUser($input_data) {
+        $allowedTypes = ['super', 'admin'];
+        if (empty($input_data['type']) || !in_array($input_data['type'], $allowedTypes, true)) {
+            $query_string = http_build_query(array(
+                'id' => $input_data["id"] ?? '',
+                'edit' => "true",
+            ));
+            $this->failure('Invalid user type.', 'Location: user.php?'.$query_string);
+        }
+
         $db = getDbInstance();
 
         $db->where('username', $input_data['username']);
@@ -126,10 +140,12 @@ class Users
 	    $db->where('id', $input_data["id"]);
 	    $stat = $db->update('users', $data_to_db);
         
-        if ($stat)
+        if ($stat) {
             $this->success('User updated successfully!');
-        else
-            $this->failure('Failed to update User: ' . $db->getLastError());
+        } else {
+            error_log('Failed to update User: ' . $db->getLastError());
+            $this->failure('Failed to update User.');
+        }
     }
     
     /**

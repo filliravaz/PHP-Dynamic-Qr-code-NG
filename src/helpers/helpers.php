@@ -28,6 +28,17 @@ function getSecureRandomToken($bytes = 16) {
 }
 
 /**
+ * Regenerate CSRF token in session
+ */
+function regenerateCsrfToken() {
+	if (session_status() === PHP_SESSION_NONE) {
+		session_start();
+	}
+	$_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+	return $_SESSION['csrf_token'];
+}
+
+/**
  * Generate CSRF token and store it in session
  */
 function getCsrfToken() {
@@ -41,9 +52,9 @@ function getCsrfToken() {
 }
 
 /**
- * Validate CSRF token from request
+ * Validate CSRF token from request and optionally rotate it (defaults to true)
  */
-function validateCsrfToken($token = null) {
+function validateCsrfToken($token = null, $rotate = true) {
 	if (session_status() === PHP_SESSION_NONE) {
 		session_start();
 	}
@@ -58,6 +69,9 @@ function validateCsrfToken($token = null) {
 		!hash_equals($_SESSION['csrf_token'], $token)
 	) {
 		return false;
+	}
+	if ($rotate) {
+		regenerateCsrfToken();
 	}
 	return true;
 }
@@ -194,22 +208,25 @@ function paginationLinks($current_page, $total_pages, $base_url) {
 
 	$html = '';
 
-	if (!empty($_GET)) {
-		// We must unset $_GET[page] if previously built by http_build_query function
-		unset($_GET['page']);
-		// To keep the query sting parameters intact while navigating to next/prev page,
-		$http_query = "?" . http_build_query($_GET);
-	} else {
-		$http_query = "?";
+	$allowedParams = ['search_str', 'order_by', 'order_dir'];
+	$queryParams = [];
+	foreach ($allowedParams as $param) {
+		if (isset($_GET[$param]) && is_scalar($_GET[$param]) && (string)$_GET[$param] !== '') {
+			$queryParams[$param] = (string)$_GET[$param];
+		}
 	}
+
+	$buildUrl = function($pageNum) use ($base_url, $queryParams) {
+		$params = array_merge($queryParams, ['page' => $pageNum]);
+		return htmlspecialchars($base_url . '?' . http_build_query($params), ENT_QUOTES, 'UTF-8');
+	};
 
 	$html = '<ul class="pagination pagination-sm m-0 float-right">';
 
 	if ($current_page == 1) {
-
 		$html .= '<li class="page-item disabled"><a class="page-link">First</a></li>';
 	} else {
-		$html .= '<li class="page-item"><a class="page-link" href="' . $base_url . $http_query . '&page=1">First</a></li>';
+		$html .= '<li class="page-item"><a class="page-link" href="' . $buildUrl(1) . '">First</a></li>';
 	}
 
 	// Show pagination links
@@ -225,9 +242,7 @@ function paginationLinks($current_page, $total_pages, $base_url) {
 	for (; $i <= ($current_page + 4) && ($i <= $total_pages); $i++) {
 		($current_page == $i) ? $li_class = ' class="active"' : $li_class = '';
 
-		$link = $base_url . $http_query;
-
-		$html = $html . '<li class="page-item"' . $li_class . '><a class="page-link" href="' . $link . '&page=' . $i . '">' . $i . '</a></li>';
+		$html = $html . '<li class="page-item"' . $li_class . '><a class="page-link" href="' . $buildUrl($i) . '">' . $i . '</a></li>';
 
 		if ($i == $current_page + 4 && $i < $total_pages) {
 
@@ -241,7 +256,7 @@ function paginationLinks($current_page, $total_pages, $base_url) {
 		$html .= '<li class="page-item disabled"><a class="page-link">Last</a></li>';
 	} else {
 
-		$html .= '<li class="page-item"><a class="page-link" href="' . $base_url . $http_query . '&page=' . $total_pages . '">Last</a></li>';
+		$html .= '<li class="page-item"><a class="page-link" href="' . $buildUrl($total_pages) . '">Last</a></li>';
 	}
 
 	$html = $html . '</ul>';
@@ -407,14 +422,24 @@ function recordLoginAttempt($username, $ip) {
  * Clear recorded attempts on successful authentication.
  */
 function clearLoginAttempts($username, $ip = null) {
-    if (empty($username) || !is_string($username) || trim($username) === '') {
+    $normUser = (is_string($username) && trim($username) !== '') ? trim($username) : null;
+    $normIp = (is_string($ip) && trim($ip) !== '') ? trim($ip) : null;
+
+    if ($normUser === null && $normIp === null) {
         return;
     }
 
     if (function_exists('getDbInstance')) {
         try {
             $db = getDbInstance();
-            $db->where('username', trim($username));
+            if ($normUser !== null) {
+                $db->where('username', $normUser);
+                if ($normIp !== null) {
+                    $db->orWhere('ip_address', $normIp);
+                }
+            } elseif ($normIp !== null) {
+                $db->where('ip_address', $normIp);
+            }
             $db->delete('login_attempts');
         } catch (\Throwable $e) {
             error_log('clearLoginAttempts storage failure: ' . $e->getMessage());
@@ -540,7 +565,8 @@ function getAppVersionInfo(): array {
     }
 
     // 2. Git inspection fallback when running in a live development git working tree
-    if (($commit === '' || $channel === '' || $version === '') && is_dir($basePath . '/../.git')) {
+    $isDevEnv = defined('TYPE') && in_array(strtolower(TYPE), ['dev', 'development', 'debug'], true);
+    if ($isDevEnv && ($commit === '' || $channel === '' || $version === '') && function_exists('shell_exec') && is_dir($basePath . '/../.git')) {
         $repoRoot = realpath($basePath . '/..');
         if ($repoRoot) {
             // Check if current HEAD matches an exact release tag

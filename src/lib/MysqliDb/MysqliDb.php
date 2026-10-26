@@ -945,11 +945,14 @@ class MysqliDb
         }
 
         $stmt = $this->_buildQuery($numRows);
-        $stmt->execute();
-        $this->_stmtError = $stmt->error;
-        $this->_stmtErrno = $stmt->errno;
-        $this->count = $stmt->affected_rows;
-        $this->reset();
+        try {
+            $stmt->execute();
+            $this->_stmtError = $stmt->error;
+            $this->_stmtErrno = $stmt->errno;
+            $this->count = $stmt->affected_rows;
+        } finally {
+            $this->reset();
+        }
 
         return ($stmt->affected_rows > -1);	//	-1 indicates that the query returned an error
     }

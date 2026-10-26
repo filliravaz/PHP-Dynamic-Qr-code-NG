@@ -3,24 +3,23 @@ require_once 'config/config.php';
 
 if (QRCODE_GENERATOR === "external-api.qrserver.com") {
     require_once BASE_PATH . '/lib/Qrcode/Qrcode.php';
-}
-
-if (QRCODE_GENERATOR === "internal-chillerlan.qrcode") {
-    require_once BASE_PATH . '/lib/Qrcode/Qrcode-intchil.php';
+} else {
+    require_once BASE_PATH . '/lib/Qrcode/Qrcode-endroid.php';
 }
 
 
 class DynamicQrcode {
     private Qrcode $qrcode_instance;
     /**
-     *
+     * DynamicQrcode constructor.
+     * Initializes the underlying Qrcode generator instance for dynamic QR codes.
      */
     public function __construct() {
         $this->qrcode_instance = new Qrcode("dynamic");
     }
 
     /**
-     *
+     * DynamicQrcode destructor.
      */
     public function __destruct() {
     }
@@ -45,6 +44,12 @@ class DynamicQrcode {
         return $ordering;
     }
 
+    /**
+     * Retrieves a dynamic QR code database record by its ID.
+     *
+     * @param int|string $id The QR code database identifier.
+     * @return array The associative array containing QR code record data.
+     */
     public function getQrcode($id) {
         return $this->qrcode_instance->getQrcode($id);
     }
@@ -72,7 +77,7 @@ class DynamicQrcode {
         $data_to_db['link'] = $rawLink;
         $data_to_db['created_by'] = $_SESSION['user_id'];
         $data_to_db['format'] = strtolower(trim($input_data['format'] ?? 'png'));
-        $data_to_db['identifier'] = randomString(rand(5,8));
+        $data_to_db['identifier'] = bin2hex(random_bytes(8));
         $data_to_db['qrcode'] = $data_to_db['filename'].'.'.$data_to_db['format'];
 
         $data_to_qrcode = READ_PATH.$data_to_db['identifier'];
@@ -130,6 +135,8 @@ class DynamicQrcode {
                 $this->qrcode_instance->deleteQrcode($id, $async);
             else
                 $this->failure("You cannot delete this qrcode because it's of another user");
+        } else {
+            $this->failure("Unauthorized");
         }
     }
 
@@ -161,8 +168,16 @@ class DynamicQrcode {
     	exit();
     }
 
-    public function debug($data) {
-        echo '<pre>' . var_export($data, true) . '</pre>';
+    /**
+     * Dumps debug data and terminates script execution.
+     *
+     * @param mixed $data Data to inspect.
+     * @return void
+     */
+    private function debug($data) {
+        if (defined('TYPE') && in_array(strtolower(TYPE), ['dev', 'development', 'debug'], true)) {
+            echo '<pre>' . htmlspecialchars(var_export($data, true), ENT_QUOTES, 'UTF-8') . '</pre>';
+        }
         exit();
     }
 }

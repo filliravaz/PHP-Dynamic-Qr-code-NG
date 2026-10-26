@@ -13,13 +13,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         http_response_code(400);
         echo json_encode([
             'data' => 'Invalid request payload.',
-            'status' => 400
+            'status' => 400,
+            'csrf_token' => getCsrfToken()
         ]);
         exit();
     }
 
     $csrfToken = $json['csrf_token'] ?? ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
-    if (!validateCsrfToken($csrfToken)) {
+    if (!validateCsrfToken($csrfToken, false)) {
         http_response_code(403);
         echo json_encode([
             'data' => 'Invalid or missing CSRF token.',
@@ -32,7 +33,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         http_response_code(400);
         echo json_encode([
             'data' => 'Invalid or missing type field in the request.',
-            'status' => 400
+            'status' => 400,
+            'csrf_token' => getCsrfToken()
         ]);
         exit();
     }
@@ -44,7 +46,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         http_response_code(400);
         echo json_encode([
             'data' => 'No qrcodes were selected.',
-            'status' => 400
+            'status' => 400,
+            'csrf_token' => getCsrfToken()
         ]);
         exit();
     }
@@ -77,7 +80,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             http_response_code(400);
             echo json_encode([
                 'data' => 'No downloadable files found.',
-                'status' => 400
+                'status' => 400,
+                'csrf_token' => getCsrfToken()
             ]);
             exit();
         }
@@ -113,16 +117,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $zip->close();
 
+            regenerateCsrfToken();
             echo json_encode([
                 'data' => $url_path,
-                'status' => 200
+                'status' => 200,
+                'csrf_token' => getCsrfToken()
             ]);
             exit();
         } else {
             http_response_code(500);
             echo json_encode([
                 'data' => 'Failed to create zip archive.',
-                'status' => 500
+                'status' => 500,
+                'csrf_token' => getCsrfToken()
             ]);
             exit();
         }
@@ -140,17 +147,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
+        regenerateCsrfToken();
         echo json_encode([
             'action' => "delete",
             'data' => "Qrcode deleted",
-            'status' => 200
+            'status' => 200,
+            'csrf_token' => getCsrfToken()
         ]);
         exit();
     } else {
         http_response_code(400);
         echo json_encode([
             'data' => 'Action not allowed.',
-            'status' => 400
+            'status' => 400,
+            'csrf_token' => getCsrfToken()
         ]);
         exit();
     }

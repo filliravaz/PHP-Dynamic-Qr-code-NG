@@ -28,7 +28,7 @@ if (!headers_sent()) {
     header("X-Frame-Options: SAMEORIGIN");
     header("X-Content-Type-Options: nosniff");
     header("Referrer-Policy: strict-origin-when-cross-origin");
-    header("Content-Security-Policy: frame-ancestors 'self'");
+    header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://code.ionicframework.com; font-src 'self' https://fonts.gstatic.com https://code.ionicframework.com data:; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'self';");
     if (isHttpsRequest()) {
         header("Strict-Transport-Security: max-age=31536000; includeSubDomains");
     }
@@ -58,12 +58,16 @@ define('READ_PATH', base_url().'/read.php?id=');
  * Get instance of DB object
  */
 function getDbInstance() {
-    return new MysqliDb (Array (
-        'host' => DATABASE_HOST,
-        'username' => DATABASE_USER,
-        'password' => DATABASE_PASSWORD,
-        'db'=> DATABASE_NAME,
-        'port' => DATABASE_PORT,
-        'prefix' => DATABASE_PREFIX,
-        'charset' => DATABASE_CHARSET));
+    static $instance = null;
+    if ($instance === null) {
+        $instance = new MysqliDb (Array (
+            'host' => DATABASE_HOST,
+            'username' => DATABASE_USER,
+            'password' => DATABASE_PASSWORD,
+            'db'=> DATABASE_NAME,
+            'port' => DATABASE_PORT,
+            'prefix' => DATABASE_PREFIX,
+            'charset' => DATABASE_CHARSET));
+    }
+    return $instance;
 }

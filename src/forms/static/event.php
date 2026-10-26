@@ -81,5 +81,3 @@
 </div>
                 
 </form>
-
-<script src="plugins/moment/moment.min.js"></script>

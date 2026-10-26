@@ -259,6 +259,12 @@
       applyAllSettings(initialSettings);
     }
 
+    // Ensure AdminLTE treeview is initialized on DOM ready without waiting for window.load
+    if ($.fn.Treeview) {
+      $(window).off('load.lte.treeview');
+      $('[data-widget="treeview"]').Treeview('init');
+    }
+
     var $sidebar = $('.control-sidebar');
     if (!$sidebar.length) return;
 
@@ -576,6 +582,9 @@
         dataType: 'json',
         contentType: 'application/json',
         success: function (res) {
+          if (res && res.csrf_token) {
+            $('input[name=csrf_token]').val(res.csrf_token);
+          }
           if (res.status == 200) {
             if (data['action'] === 'download') {
               window.location.href = res.data;
@@ -592,7 +601,16 @@
           }
         },
         error: function (err) {
-          var errorText = (err && err.responseText) ? err.responseText : 'An unexpected error occurred.';
+          var res = err.responseJSON;
+          if (!res && err.responseText) {
+            try {
+              res = JSON.parse(err.responseText);
+            } catch (e) {}
+          }
+          if (res && res.csrf_token) {
+            $('input[name=csrf_token]').val(res.csrf_token);
+          }
+          var errorText = (res && res.data) ? res.data : ((err && err.responseText) ? err.responseText : 'An unexpected error occurred.');
           var $err = $('#err-msg').empty().append('<i class="fas fa-exclamation-circle"></i> ');
           $err.append(document.createTextNode(' ' + errorText));
           $('#err-msg').css('display', 'block');
