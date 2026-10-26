@@ -726,6 +726,90 @@ class StaticQrcode {
     }
 
     /**
+     * Checks if a two-letter ISO country code belongs to the SEPA zone.
+     *
+     * @param string $country Two-letter ISO country code.
+     * @return bool True if country is in SEPA, false otherwise.
+     */
+    private function isSepaCountry(string $country): bool
+    {
+        static $sepaCountries = [
+            'AD', 'AT', 'BE', 'BG', 'CH', 'CY', 'CZ', 'DE', 'DK', 'EE',
+            'ES', 'FI', 'FR', 'GB', 'GI', 'GR', 'HR', 'HU', 'IE', 'IS',
+            'IT', 'LI', 'LT', 'LU', 'LV', 'MC', 'MT', 'NL', 'NO', 'PL',
+            'PT', 'RO', 'SE', 'SI', 'SK', 'SM', 'VA'
+        ];
+        return in_array(strtoupper($country), $sepaCountries, true);
+    }
+
+    /**
+     * Checks if a two-letter ISO country code belongs to the European Economic Area (EEA).
+     *
+     * @param string $country Two-letter ISO country code.
+     * @return bool True if country is in EEA, false otherwise.
+     */
+    private function isEeaCountry(string $country): bool
+    {
+        static $eeaCountries = [
+            'AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI',
+            'FR', 'GR', 'HR', 'HU', 'IE', 'IS', 'IT', 'LI', 'LT', 'LU',
+            'LV', 'MT', 'NL', 'NO', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK'
+        ];
+        return in_array(strtoupper($country), $eeaCountries, true);
+    }
+
+    /**
+     * Validates a SWIFT/BIC code according to ISO 9362 (8 or 11 alphanumeric characters).
+     *
+     * @param string $bic Business Identifier Code.
+     * @return bool True if valid BIC format, false otherwise.
+     */
+    private function isValidBic(string $bic): bool
+    {
+        $bic = strtoupper(trim($bic));
+        $len = strlen($bic);
+        if ($len !== 8 && $len !== 11) {
+            return false;
+        }
+        return (bool)preg_match('/^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$/', $bic);
+    }
+
+    /**
+     * Validates a Pix key against supported DICT key formats:
+     * - CPF (11 digits)
+     * - CNPJ (14 digits)
+     * - Email (valid email, up to 77 characters)
+     * - Phone (E.164 format, e.g. +5511999999999)
+     * - EVP / Random key (UUID: 36 characters)
+     *
+     * @param string $key Pix key string.
+     * @return bool True if valid Pix key, false otherwise.
+     */
+    private function isValidPixKey(string $key): bool
+    {
+        $key = trim($key);
+        if ($key === '') {
+            return false;
+        }
+        if (preg_match('/^\d{11}$/', $key)) {
+            return true;
+        }
+        if (preg_match('/^\d{14}$/', $key)) {
+            return true;
+        }
+        if (strlen($key) <= 77 && filter_var($key, FILTER_VALIDATE_EMAIL)) {
+            return true;
+        }
+        if (preg_match('/^\+[1-9]\d{7,14}$/', $key)) {
+            return true;
+        }
+        if (preg_match('/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/', $key)) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * Creates a QR code of type "sepa" adhering to the European Payments Council standard.
      *
      * @param string $name Beneficiary account holder name.
@@ -747,6 +831,21 @@ class StaticQrcode {
             if (!$this->isValidIban($iban)) {
                 $this->failure('Invalid IBAN provided.');
             }
+            $country = substr($iban, 0, 2);
+            if (!$this->isSepaCountry($country)) {
+                $this->failure('IBAN must belong to a SEPA country.');
+            }
+
+            if ($bic === '') {
+                if (!$this->isEeaCountry($country)) {
+                    $this->failure('BIC is required for non-EEA SEPA participants.');
+                }
+            } else {
+                if (!$this->isValidBic($bic)) {
+                    $this->failure('Invalid BIC provided.');
+                }
+            }
+
             $formattedAmount = '';
             if (!empty($amount)) {
                 $cleanAmount = str_replace(',', '.', $amount);
@@ -777,7 +876,7 @@ class StaticQrcode {
                 ''
             ];
 
-            $this->sData = implode("\n", $lines);
+            $this->sData = rtrim(implode("\n", $lines), "\r\n");
             $this->sContent = '<strong>Beneficiary:</strong> ' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . '<br>' .
                               '<strong>IBAN:</strong> ' . htmlspecialchars($iban, ENT_QUOTES, 'UTF-8');
             if (!empty($bic)) {
@@ -871,11 +970,14 @@ class StaticQrcode {
         $txid = trim($txid) ?: '***';
 
         if (!empty($pix_key) && !empty($merchant_name) && !empty($merchant_city)) {
+            if (!$this->isValidPixKey($pix_key)) {
+                $this->failure('Invalid Pix key provided.');
+            }
+
             // Field 26: Merchant Account Information
             $field26 = $this->emvTlv('00', 'br.gov.bcb.pix') . $this->emvTlv('01', $pix_key);
 
             $payload = $this->emvTlv('00', '01') .                     // Format Indicator
-                       $this->emvTlv('01', '12') .                     // Point of Initiation Method
                        $this->emvTlv('26', $field26) .                 // Merchant Account Information
                        $this->emvTlv('52', '0000') .                   // Merchant Category Code
                        $this->emvTlv('53', '986');                     // Currency BRL
@@ -967,7 +1069,12 @@ class StaticQrcode {
             $this->requiredFieldsError();
             return;
         } else if ($platform === 'zoom' && !empty($meeting_id)) {
-            $targetUrl = 'https://zoom.us/j/' . preg_replace('/[^0-9]/', '', $meeting_id);
+            $cleanMeetingId = preg_replace('/[^0-9]/', '', $meeting_id);
+            if ($cleanMeetingId === '') {
+                $this->failure('Invalid Zoom meeting ID.');
+                return;
+            }
+            $targetUrl = 'https://zoom.us/j/' . $cleanMeetingId;
             if (!empty($password)) {
                 $targetUrl .= '?pwd=' . urlencode($password);
             }
