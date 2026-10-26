@@ -675,6 +675,19 @@ class Qrcode {
                     $result = !empty($writerOptions) ? $writer->write($qrCode, $logo, options: $writerOptions) : $writer->write($qrCode, $logo);
                     $svgContent = $result->getString();
 
+                    $vbMinX = 0.0;
+                    $vbMinY = 0.0;
+                    $vbW = (float)$options['size'];
+                    $vbH = (float)$options['size'];
+                    if (preg_match('/viewBox=["\']\s*(-?[\d.]+)[,\s]+(-?[\d.]+)[,\s]+(-?[\d.]+)[,\s]+(-?[\d.]+)\s*["\']/i', $svgContent, $vbMatches)) {
+                        $vbMinX = (float)$vbMatches[1];
+                        $vbMinY = (float)$vbMatches[2];
+                        $vbW = (float)$vbMatches[3];
+                        $vbH = (float)$vbMatches[4];
+                    }
+                    $cx = $vbMinX + ($vbW / 2);
+                    $cy = $vbMinY + ($vbH / 2);
+
                     if ($options['gradientType'] !== 'none') {
                         $c1 = $this->hexToRgb($options['foreground']);
                         $c2 = $this->hexToRgb($options['gradientColor']);
@@ -685,19 +698,6 @@ class Qrcode {
 
                         $fgHex = '#' . $options['foreground'];
                         $gHex = '#' . $options['gradientColor'];
-
-                        $vbMinX = 0.0;
-                        $vbMinY = 0.0;
-                        $vbW = (float)$options['size'];
-                        $vbH = (float)$options['size'];
-                        if (preg_match('/viewBox=["\']\s*(-?[\d.]+)[,\s]+(-?[\d.]+)[,\s]+(-?[\d.]+)[,\s]+(-?[\d.]+)\s*["\']/i', $svgContent, $vbMatches)) {
-                            $vbMinX = (float)$vbMatches[1];
-                            $vbMinY = (float)$vbMatches[2];
-                            $vbW = (float)$vbMatches[3];
-                            $vbH = (float)$vbMatches[4];
-                        }
-                        $cx = $vbMinX + ($vbW / 2);
-                        $cy = $vbMinY + ($vbH / 2);
 
                         if ($options['gradientType'] === 'radial') {
                             $r = max($vbW, $vbH) * 0.7;
@@ -723,20 +723,38 @@ class Qrcode {
                         $svgContent = str_ireplace('fill="' . $fgHex . '"', 'fill="url(#qr-grad)"', $svgContent);
                     }
 
-                    if (in_array($options['roundBlock'], ['shrink', 'dots'], true)) {
-                        $svgContent = preg_replace('/(<rect\b(?![^>]*\brx=)[^>]*\bid=["\']?block["\']?[^\/>]*)(\/?>)/i', '$1 rx="40%" ry="40%"$2', $svgContent);
-                    } elseif ($options['roundBlock'] === 'rounded') {
-                        $svgContent = preg_replace('/(<rect\b(?![^>]*\brx=)[^>]*\bid=["\']?block["\']?[^\/>]*)(\/?>)/i', '$1 rx="25%" ry="25%"$2', $svgContent);
+                    if (in_array($options['roundBlock'], ['shrink', 'dots', 'rounded'], true)) {
+                        $ratio = ($options['roundBlock'] === 'rounded') ? 0.25 : 0.40;
+                        /**
+                         * Calculates user-unit rx and ry attributes based on the block rect width.
+                         *
+                         * @param array $matches Regular expression match groups.
+                         * @return string Modified rect element.
+                         */
+                        $svgContent = preg_replace_callback(
+                            '/(<rect\b(?![^>]*\brx=)[^>]*\bid=["\']?block["\']?[^\/>]*)(\/?>)/i',
+                            function ($matches) use ($ratio) {
+                                $tag = $matches[1];
+                                $close = $matches[2];
+                                if (preg_match('/\bwidth=["\']\s*([\d.]+)\s*["\']/i', $tag, $wMatch)) {
+                                    $blockWidth = (float)$wMatch[1];
+                                    $radius = round($blockWidth * $ratio, 4);
+                                    return $tag . ' rx="' . $radius . '" ry="' . $radius . '"' . $close;
+                                }
+                                return $matches[0];
+                            },
+                            $svgContent
+                        );
                     }
 
                     if ($options['logoShape'] === 'circle') {
-                        $punchRadius = ($options['size'] * $options['logoScale'] / 2) + 6;
-                        $punchDef = '<circle cx="' . ($options['size'] / 2) . '" cy="' . ($options['size'] / 2) . '" r="' . $punchRadius . '" fill="#' . $options['background'] . '"/>';
+                        $punchRadius = ($vbW * $options['logoScale'] / 2) + 6;
+                        $punchDef = '<circle cx="' . $cx . '" cy="' . $cy . '" r="' . $punchRadius . '" fill="#' . $options['background'] . '"/>';
                         $svgContent = preg_replace('/(<image\b)/i', $punchDef . '$1', $svgContent, 1);
                     } elseif ($options['logoShape'] === 'rounded') {
-                        $dim = ($options['size'] * $options['logoScale']) + 12;
-                        $pX = ($options['size'] - $dim) / 2;
-                        $pY = ($options['size'] - $dim) / 2;
+                        $dim = ($vbW * $options['logoScale']) + 12;
+                        $pX = $vbMinX + (($vbW - $dim) / 2);
+                        $pY = $vbMinY + (($vbH - $dim) / 2);
                         $punchDef = '<rect x="' . $pX . '" y="' . $pY . '" width="' . $dim . '" height="' . $dim . '" rx="8" ry="8" fill="#' . $options['background'] . '"/>';
                         $svgContent = preg_replace('/(<image\b)/i', $punchDef . '$1', $svgContent, 1);
                     }

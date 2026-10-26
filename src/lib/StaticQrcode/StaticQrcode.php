@@ -934,6 +934,9 @@ class StaticQrcode {
                 return;
             }
             $targetUrl = $url;
+        } else if ($platform === 'teams') {
+            $this->requiredFieldsError();
+            return;
         } else if ($platform === 'zoom' && !empty($meeting_id)) {
             $targetUrl = 'https://zoom.us/j/' . preg_replace('/[^0-9]/', '', $meeting_id);
             if (!empty($password)) {
@@ -941,7 +944,7 @@ class StaticQrcode {
             }
         } else if ($platform === 'facetime' && !empty($meeting_id)) {
             $targetUrl = 'facetime:' . $meeting_id;
-        } else if (!empty($meeting_id)) {
+        } else if (!empty($meeting_id) && $platform !== 'teams') {
             $targetUrl = $meeting_id;
         }
 
