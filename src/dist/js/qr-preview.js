@@ -591,7 +591,8 @@
             var ssid = $form.find('input[name="ssid"]').val() || 'MyNetwork';
             var pwd = $form.find('input[name="password"]').val() || '';
             var enc = $form.find('select[name="encryption"]').val() || 'WPA';
-            payload = 'WIFI:T:' + enc + ';S:' + ssid + ';P:' + pwd + ';;';
+            var escapeWifi = function(s) { return String(s).replace(/([\\;:,\"])/g, '\\$1'); };
+            payload = 'WIFI:T:' + enc + ';S:' + escapeWifi(ssid) + ';P:' + escapeWifi(pwd) + ';;';
         } else if (activeTab === 'crypto') {
             var cur = $form.find('select[name="currency"]').val() || 'ethereum';
             var addr = $form.find('input[name="address"]').val() || '0x71C...';

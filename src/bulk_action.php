@@ -115,14 +115,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             echo json_encode([
                 'data' => $url_path,
-                'status' => 200
+                'status' => 200,
+                'csrf_token' => getCsrfToken()
             ]);
             exit();
         } else {
             http_response_code(500);
             echo json_encode([
                 'data' => 'Failed to create zip archive.',
-                'status' => 500
+                'status' => 500,
+                'csrf_token' => getCsrfToken()
             ]);
             exit();
         }
@@ -143,7 +145,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         echo json_encode([
             'action' => "delete",
             'data' => "Qrcode deleted",
-            'status' => 200
+            'status' => 200,
+            'csrf_token' => getCsrfToken()
         ]);
         exit();
     } else {

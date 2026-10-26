@@ -72,7 +72,13 @@ class StaticQrcode {
     public function emailQrcode($email, $subject, $message)
     {
         if($email != NULL && $message != NULL){
-            $this->sData = 'MATMSG:TO:'.$email.';SUB:'.$subject.';BODY:'.$message.';';
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $this->failure('Invalid email address.');
+            }
+            $escape = function($v) {
+                return addcslashes((string)$v, ';:\\');
+            };
+            $this->sData = 'MATMSG:TO:'.$escape($email).';SUB:'.$escape($subject).';BODY:'.$escape($message).';;';
             $this->sContent = '<strong>Email:</strong> ' . htmlspecialchars($email, ENT_QUOTES, 'UTF-8') . '<br>' .
                               '<strong>Subject:</strong> ' . htmlspecialchars($subject, ENT_QUOTES, 'UTF-8') . '<br>' .
                               '<strong>Message:</strong> ' . htmlspecialchars($message, ENT_QUOTES, 'UTF-8');
@@ -162,9 +168,14 @@ class StaticQrcode {
     public function locationQrcode($latitude, $longitude)
     {
         if($latitude != NULL && $longitude != NULL){
-            $this->sData = 'GEO:'.$latitude.','.$longitude.';';
-            $this->sContent = '<strong>Latitude:</strong> ' . htmlspecialchars($latitude, ENT_QUOTES, 'UTF-8') . '<br>' .
-                              '<strong>Longitude:</strong> ' . htmlspecialchars($longitude, ENT_QUOTES, 'UTF-8');
+            $lat = filter_var($latitude, FILTER_VALIDATE_FLOAT);
+            $lon = filter_var($longitude, FILTER_VALIDATE_FLOAT);
+            if ($lat === false || $lon === false || $lat < -90 || $lat > 90 || $lon < -180 || $lon > 180) {
+                $this->failure('Invalid coordinates.');
+            }
+            $this->sData = 'GEO:'.$lat.','.$lon.';';
+            $this->sContent = '<strong>Latitude:</strong> ' . htmlspecialchars((string)$lat, ENT_QUOTES, 'UTF-8') . '<br>' .
+                              '<strong>Longitude:</strong> ' . htmlspecialchars((string)$lon, ENT_QUOTES, 'UTF-8');
 
             $this->addQrcode("location");
         }
@@ -303,8 +314,16 @@ class StaticQrcode {
     public function wifiQrcode($encryption, $ssid, $password)
     {
         if($ssid != NULL){
-            $this->sData = 'WIFI:T:'.$encryption.';S:'.$ssid.';P:'.$password.';';  
-            $this->sContent = '<strong>Encryption:</strong> ' . htmlspecialchars($encryption, ENT_QUOTES, 'UTF-8') . '<br>' .
+            $allowedEnc = ['WPA', 'WEP', 'WPA2', 'nopass', ''];
+            $encUpper = strtoupper(trim((string)$encryption));
+            if (!in_array($encUpper, $allowedEnc, true)) {
+                $encUpper = 'WPA';
+            }
+            $escape = function($v) {
+                return addcslashes((string)$v, ';:\"\\,');
+            };
+            $this->sData = 'WIFI:T:' . $encUpper . ';S:' . $escape($ssid) . ';P:' . $escape($password) . ';;';  
+            $this->sContent = '<strong>Encryption:</strong> ' . htmlspecialchars($encUpper, ENT_QUOTES, 'UTF-8') . '<br>' .
                               '<strong>SSID:</strong> ' . htmlspecialchars($ssid, ENT_QUOTES, 'UTF-8') . '<br>' .
                               '<strong>Password:</strong> ' . htmlspecialchars($password, ENT_QUOTES, 'UTF-8');
 
@@ -402,14 +421,23 @@ class StaticQrcode {
     public function twofaQrcode($algorithms, $secret, $label, $issuer)
     {
         if($algorithms != NULL && $secret != NULL && $label != NULL){
-            $this->sData = 'otpauth://' . $algorithms . '/' . $label . '?secret=' . $secret;
+            $allowed_algos = ['totp', 'hotp'];
+            $cleanAlgo = strtolower(trim((string)$algorithms));
+            if (!in_array($cleanAlgo, $allowed_algos, true)) {
+                $this->failure('Invalid OTP algorithm.');
+            }
+            $cleanSecret = preg_replace('/[^A-Z2-7=]/i', '', strtoupper(trim((string)$secret)));
+            if (empty($cleanSecret)) {
+                $this->failure('Invalid secret key (must be Base32).');
+            }
+            $this->sData = 'otpauth://' . $cleanAlgo . '/' . $label . '?secret=' . $cleanSecret;
 
             if (!empty($issuer)) {
                 $this->sData .= '&issuer=' . $issuer;
             }
 
-            $this->sContent = '<strong>Type:</strong> ' . htmlspecialchars($algorithms, ENT_QUOTES, 'UTF-8') . '<br>' .
-                              '<strong>Secret:</strong> ' . htmlspecialchars($secret, ENT_QUOTES, 'UTF-8') . '<br>' .
+            $this->sContent = '<strong>Type:</strong> ' . htmlspecialchars($cleanAlgo, ENT_QUOTES, 'UTF-8') . '<br>' .
+                              '<strong>Secret:</strong> ' . htmlspecialchars($cleanSecret, ENT_QUOTES, 'UTF-8') . '<br>' .
                               '<strong>Label:</strong> ' . htmlspecialchars(rawurldecode($label), ENT_QUOTES, 'UTF-8');
 
             if (!empty($issuer)) {
@@ -943,8 +971,17 @@ class StaticQrcode {
                 $targetUrl .= '?pwd=' . urlencode($password);
             }
         } else if ($platform === 'facetime' && !empty($meeting_id)) {
-            $targetUrl = 'facetime:' . $meeting_id;
+            $cleanFacetime = preg_replace('/[^0-9+\-@.a-zA-Z]/', '', $meeting_id);
+            if (empty($cleanFacetime)) {
+                $this->failure('Invalid FaceTime ID.');
+                return;
+            }
+            $targetUrl = 'facetime:' . $cleanFacetime;
         } else if (!empty($meeting_id) && $platform !== 'teams') {
+            if (!$this->isValidHttpUrl($meeting_id)) {
+                $this->failure('Meeting ID must be a valid HTTP/HTTPS URL for unknown platforms.');
+                return;
+            }
             $targetUrl = $meeting_id;
         }
 
@@ -1093,8 +1130,8 @@ class StaticQrcode {
             $input_data["preset_logo"] = $_POST['preset_logo'];
         foreach(['logo_shape','gradient_type','gradient_color','gradient_angle','gradient_balance','gradient_direction','custom_eyes_enabled','eye_outer','eye_inner'] as $k) { if(isset($_POST[$k])) $input_data[$k] = $_POST[$k]; }
 
-        $input_data["foreground"] = $_POST['foreground'];
-        $input_data["background"] = $_POST['background'];
+        $input_data["foreground"] = $_POST['foreground'] ?? '000000';
+        $input_data["background"] = $_POST['background'] ?? 'ffffff';
 
         $data_to_qrcode = urlencode($this->sData);
 
@@ -1143,6 +1180,8 @@ class StaticQrcode {
                 $this->qrcode_instance->deleteQrcode($id, $async);
             else
                 $this->failure("You cannot delete this qrcode because it's of another user");
+        } else {
+            $this->failure("Unauthorized");
         }
     }
     
@@ -1186,9 +1225,11 @@ class StaticQrcode {
      * @param mixed $data Data to inspect.
      * @return void
      */
-    public function debug($data) {
-        echo '<pre>' . var_export($data, true) . '</pre>';
-        exit();
+    private function debug($data) {
+        if (defined('TYPE') && in_array(strtolower(TYPE), ['dev', 'development', 'debug'], true)) {
+            echo '<pre>' . htmlspecialchars(var_export($data, true), ENT_QUOTES, 'UTF-8') . '</pre>';
+            exit();
+        }
     }
 }
 ?>

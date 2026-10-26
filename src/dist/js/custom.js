@@ -576,6 +576,9 @@
         dataType: 'json',
         contentType: 'application/json',
         success: function (res) {
+          if (res && res.csrf_token) {
+            $('input[name=csrf_token]').val(res.csrf_token);
+          }
           if (res.status == 200) {
             if (data['action'] === 'download') {
               window.location.href = res.data;

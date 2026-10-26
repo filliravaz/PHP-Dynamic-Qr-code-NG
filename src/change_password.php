@@ -1,24 +1,7 @@
 <?php
 require_once 'config/config.php';
 session_start();
-
-if (empty($_SESSION['user_logged_in']) || empty($_SESSION['user_id'])) {
-    header('Location: login.php');
-    exit;
-}
-
-$db = getDbInstance();
-$db->where('id', (int)$_SESSION['user_id']);
-$authUser = $db->getOne('users', ['id', 'session_version']);
-if (!$authUser || (int)($authUser['session_version'] ?? 1) !== (int)($_SESSION['session_version'] ?? 0)) {
-    clearAuthCookie();
-    $_SESSION = [];
-    if (session_status() === PHP_SESSION_ACTIVE) {
-        session_destroy();
-    }
-    header('Location: login.php');
-    exit;
-}
+require_once BASE_PATH . '/includes/auth_validate.php';
 
 $errors = [];
 $isFirstLogin = !empty($_SESSION['must_change_password']);

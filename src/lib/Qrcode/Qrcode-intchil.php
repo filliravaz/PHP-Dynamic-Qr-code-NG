@@ -336,7 +336,8 @@ class Qrcode {
             $this->success('Qr code added successfully!');
         }
         else {
-            $this->failure('Insert failed: ' . $db->getLastError());
+            error_log('Insert failed: ' . $db->getLastError());
+            $this->failure('Failed to create QR code.');
         }
     }
     
@@ -375,7 +376,8 @@ class Qrcode {
             $this->success('Qr code updated successfully!');
         }
         else {
-            $this->failure('Insert failed: ' . $db->getLastError());
+            error_log('Update failed: ' . $db->getLastError());
+            $this->failure('Failed to update QR code.');
         }
     }
 

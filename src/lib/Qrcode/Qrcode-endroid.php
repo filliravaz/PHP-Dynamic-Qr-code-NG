@@ -856,7 +856,8 @@ class Qrcode {
             if (file_exists($filename)) {
                 @unlink($filename);
             }
-            $this->failure('Insert failed: ' . $db->getLastError());
+            error_log('Insert failed: ' . $db->getLastError());
+            $this->failure('Failed to create QR code.');
         }
         } finally {
             $this->cleanupUploadedLogo();
@@ -899,7 +900,8 @@ class Qrcode {
 
             if (!$stat && $renamed) {
                 if (!@rename($newFile, $oldFile)) {
-                    $this->failure('Update failed: ' . $db->getLastError() . ' (Rollback failed: unable to restore file)');
+                    error_log('Update failed: ' . $db->getLastError() . ' (Rollback failed: unable to restore file)');
+                    $this->failure('Update failed. File restoration failed.');
                 }
             }
 
@@ -911,7 +913,8 @@ class Qrcode {
         if ($stat) {
             $this->success('Qr code updated successfully!');
         } else {
-            $this->failure('Update failed: ' . $db->getLastError());
+            error_log('Update failed: ' . $db->getLastError());
+            $this->failure('Failed to update QR code.');
         }
     }
 
