@@ -183,6 +183,7 @@ if($_SERVER["REQUEST_METHOD"] === "POST") {
 <!-- Page script -->
 <script type="text/javascript">
 $(document).ready(function(){
+   if ($('#static_form').length && $.fn.validate) {
    $('#static_form').validate({
        rules: {
             filename: {
@@ -190,6 +191,7 @@ $(document).ready(function(){
             },
         }
     });
+   }
 });
 </script>
 
@@ -205,7 +207,8 @@ $(document).ready(function(){
                 $(this).find('.fa-square').css('color', event.color.toString());
             });
 
-            $('#start').daterangepicker({
+            if ($('#start').length && typeof moment === 'function') {
+                $('#start').daterangepicker({
                 timePicker: true,
                 timePicker24Hour: true,
                 singleDatePicker: true,
@@ -215,9 +218,11 @@ $(document).ready(function(){
                 locale: {
                     format: 'YYYY-MM-DD HH:mm'
                 }
-            })
+            });
+            }
 
-            $('#end').daterangepicker({
+            if ($('#end').length && typeof moment === 'function') {
+                $('#end').daterangepicker({
                 timePicker: true,
                 timePicker24Hour: true,
                 singleDatePicker: true,
@@ -227,7 +232,8 @@ $(document).ready(function(){
                 locale: {
                     format: 'YYYY-MM-DD HH:mm'
                 }
-            })
+            });
+            }
 
         })
     </script>

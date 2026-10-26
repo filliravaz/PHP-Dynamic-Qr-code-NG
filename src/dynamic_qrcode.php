@@ -125,6 +125,7 @@ if($_SERVER["REQUEST_METHOD"] === "POST") {
 <!-- Page script -->
 <script type="text/javascript">
 $(document).ready(function(){
+   if ($('#dynamic_form').length && $.fn.validate) {
    $('#dynamic_form').validate({
        rules: {
             filename: {
@@ -136,6 +137,7 @@ $(document).ready(function(){
             },   
         }
     });
+   }
 });
 </script>
 

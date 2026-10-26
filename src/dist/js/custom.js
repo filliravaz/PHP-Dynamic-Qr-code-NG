@@ -259,6 +259,12 @@
       applyAllSettings(initialSettings);
     }
 
+    // Ensure AdminLTE treeview is initialized on DOM ready without waiting for window.load
+    if ($.fn.Treeview) {
+      $(window).off('load.lte.treeview');
+      $('[data-widget="treeview"]').Treeview('init');
+    }
+
     var $sidebar = $('.control-sidebar');
     if (!$sidebar.length) return;
 

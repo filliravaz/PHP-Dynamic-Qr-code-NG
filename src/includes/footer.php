@@ -32,12 +32,17 @@ $appVersionInfo = function_exists('getAppVersionInfo') ? getAppVersionInfo() : [
 <script src="plugins/jquery/jquery.min.js"></script>
 <!-- Bootstrap -->
 <script src="plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
+<!-- jquery-validation -->
+<script src="plugins/jquery-validation/jquery.validate.min.js"></script>
+<script src="plugins/jquery-validation/additional-methods.min.js"></script>
 <!-- AdminLTE App -->
 <script src="dist/js/adminlte.min.js"></script>
 <!-- AdminLTE Custom-->
 <script src="dist/js/custom.js?nocache=<?php print rand();?>"></script>
 <!-- Color picker -->
 <script src="plugins/bootstrap-colorpicker/js/bootstrap-colorpicker.min.js"></script>
+<!-- Moment -->
+<script src="plugins/moment/moment.min.js"></script>
 <!-- date-range-picker -->
 <script src="plugins/daterangepicker/daterangepicker.js"></script>
 <!-- Overlay scrollbar -->
