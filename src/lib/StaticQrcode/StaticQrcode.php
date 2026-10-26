@@ -13,15 +13,17 @@ class StaticQrcode {
     private $sData;         // Data for the qr code
     private $sContent;      // Content to be stored in the database
     private Qrcode $qrcode_instance;
+
     /**
-     *
+     * StaticQrcode constructor.
+     * Initializes the underlying Qrcode generator instance for static QR codes.
      */
     public function __construct() {
         $this->qrcode_instance = new Qrcode("static");
     }
 
     /**
-     *
+     * StaticQrcode destructor.
      */
     public function __destruct()
     {
@@ -421,7 +423,11 @@ class StaticQrcode {
     }
 
     /**
-     * create a qr code of type "telegram"
+     * Creates a QR code of type "telegram" linking to a Telegram user or group chat.
+     *
+     * @param string $username Telegram username or handle.
+     * @param string $message Optional pre-filled message text.
+     * @return void
      */
     public function telegramQrcode($username, $message = '')
     {
@@ -447,6 +453,9 @@ class StaticQrcode {
 
     /**
      * Validates that a string is a valid HTTP or HTTPS URL with a non-empty host.
+     *
+     * @param string $url The URL string to validate.
+     * @return bool True if the URL is valid HTTP/HTTPS, false otherwise.
      */
     private function isValidHttpUrl(string $url): bool
     {
@@ -462,7 +471,12 @@ class StaticQrcode {
     }
 
     /**
-     * create a qr code of type "social" (YouTube, Instagram, LinkedIn, X, TikTok)
+     * Creates a QR code of type "social" (YouTube, Instagram, LinkedIn, X, TikTok).
+     *
+     * @param string $platform Social network platform name.
+     * @param string $username Profile username or handle.
+     * @param string $custom_url Optional direct custom profile URL.
+     * @return void
      */
     public function socialQrcode($platform, $username, $custom_url = '')
     {
@@ -531,7 +545,13 @@ class StaticQrcode {
     }
 
     /**
-     * create a qr code of type "crypto" (Ethereum, Solana, Monero)
+     * Creates a QR code of type "crypto" (Ethereum, Solana, Monero).
+     *
+     * @param string $currency Cryptocurrency identifier (e.g. 'ethereum', 'solana', 'monero').
+     * @param string $address Wallet destination address.
+     * @param string $amount Optional transfer amount.
+     * @param string $message Optional transaction message or note.
+     * @return void
      */
     public function cryptoQrcode($currency, $address, $amount = '', $message = '')
     {
@@ -612,6 +632,9 @@ class StaticQrcode {
 
     /**
      * Validates an IBAN against ISO 13616 country formats and mod-97 checksum.
+     *
+     * @param string $iban International Bank Account Number string.
+     * @return bool True if the IBAN format and checksum are valid, false otherwise.
      */
     private function isValidIban(string $iban): bool
     {
@@ -674,7 +697,14 @@ class StaticQrcode {
     }
 
     /**
-     * create a qr code of type "sepa" (EPC standard)
+     * Creates a QR code of type "sepa" adhering to the European Payments Council standard.
+     *
+     * @param string $name Beneficiary account holder name.
+     * @param string $iban International Bank Account Number.
+     * @param string $bic Optional Business Identifier Code (SWIFT/BIC).
+     * @param string $amount Optional payment amount in EUR.
+     * @param string $remittance Optional payment remittance reference/information.
+     * @return void
      */
     public function sepaQrcode($name, $iban, $bic = '', $amount = '', $remittance = '')
     {
@@ -738,14 +768,21 @@ class StaticQrcode {
     }
 
     /**
-     * Helper for EMV TLV (Type-Length-Value) string construction
+     * Helper for EMV TLV (Type-Length-Value) string construction.
+     *
+     * @param string $id Tag identifier (2 characters).
+     * @param string $value Data element value.
+     * @return string Formatted TLV string.
      */
     private function emvTlv(string $id, string $value): string {
         return sprintf('%02s%02d%s', $id, strlen($value), $value);
     }
 
     /**
-     * Compute CRC16-CCITT (polynomial 0x1021, init 0xFFFF)
+     * Computes CRC16-CCITT checksum (polynomial 0x1021, init 0xFFFF).
+     *
+     * @param string $data Input string data.
+     * @return string 4-character uppercase hexadecimal CRC16 checksum.
      */
     private function computeCrc16(string $data): string {
         $crc = 0xFFFF;
@@ -764,7 +801,10 @@ class StaticQrcode {
     }
 
     /**
-     * Transliterates a string to ASCII characters.
+     * Transliterates a Unicode string to plain ASCII characters.
+     *
+     * @param string $text Input text with possible Unicode characters.
+     * @return string Transliterated ASCII string.
      */
     private function transliterateToAscii(string $text): string
     {
@@ -784,7 +824,14 @@ class StaticQrcode {
     }
 
     /**
-     * create a qr code of type "pix" (Brazilian Instant Payments EMV standard)
+     * Creates a QR code of type "pix" conforming to the Brazilian Instant Payments EMV standard.
+     *
+     * @param string $pix_key Pix key (CPF, CNPJ, email, phone, or random key).
+     * @param string $merchant_name Beneficiary / Merchant name.
+     * @param string $merchant_city Merchant city name.
+     * @param string $amount Optional transaction amount in BRL.
+     * @param string $txid Optional transaction identifier.
+     * @return void
      */
     public function pixQrcode($pix_key, $merchant_name, $merchant_city, $amount = '', $txid = '')
     {
@@ -860,7 +907,13 @@ class StaticQrcode {
     }
 
     /**
-     * create a qr code of type "meeting" (Zoom, Teams, FaceTime)
+     * Creates a QR code of type "meeting" (Zoom, Teams, FaceTime).
+     *
+     * @param string $platform Meeting service platform name.
+     * @param string $meeting_id Meeting identifier or dial-in number.
+     * @param string $password Optional passcode/password for the meeting.
+     * @param string $url Optional direct invitation web URL.
+     * @return void
      */
     public function meetingQrcode($platform, $meeting_id, $password = '', $url = '')
     {
@@ -903,12 +956,28 @@ class StaticQrcode {
     }
 
     /**
-     * create a qr code of type "mecard" (Mobile contact standard)
+     * Creates a QR code of type "mecard" conforming to the mobile contact standard.
+     *
+     * @param string $name Contact full name.
+     * @param string $reading Optional name pronunciation/reading sound.
+     * @param string $tel Optional phone number.
+     * @param string $email Optional email address.
+     * @param string $memo Optional note or memo.
+     * @param string $address Optional postal address.
+     * @param string $url Optional website URL.
+     * @return void
      */
     public function mecardQrcode($name, $reading = '', $tel = '', $email = '', $memo = '', $address = '', $url = '')
     {
         $name = trim($name);
         if (!empty($name)) {
+            /**
+             * Escapes reserved characters for MECARD formatted strings.
+             *
+             * @param string $value Text to escape.
+             * @param bool $escapeComma Whether commas should be escaped.
+             * @return string Escaped string.
+             */
             $escapeMecard = function(string $value, bool $escapeComma = true): string {
                 $value = str_replace('\\', '\\\\', $value);
                 $value = str_replace(';', '\;', $value);
@@ -940,7 +1009,15 @@ class StaticQrcode {
     }
 
     /**
-     * create a qr code of type "medical" (Emergency Medical ID)
+     * Creates a QR code of type "medical" representing an Emergency Medical ID profile.
+     *
+     * @param string $name Patient full name.
+     * @param string $blood_type Optional blood group/type.
+     * @param string $allergies Optional known allergies.
+     * @param string $medications Optional current medications.
+     * @param string $emergency_contact Optional emergency contact details.
+     * @param string $notes Optional medical conditions or instructions.
+     * @return void
      */
     public function medicalQrcode($name, $blood_type = '', $allergies = '', $medications = '', $emergency_contact = '', $notes = '')
     {
@@ -966,6 +1043,12 @@ class StaticQrcode {
         }
     }
 
+    /**
+     * Retrieves a static QR code database record by its ID.
+     *
+     * @param int|string $id The QR code database identifier.
+     * @return array The associative array containing QR code record data.
+     */
     public function getQrcode($id) {
         return $this->qrcode_instance->getQrcode($id);
     }
@@ -1094,6 +1177,12 @@ class StaticQrcode {
         $this->failure('The qr code cannot be created if you do not fill in all the required fields (*)');
     }
 
+    /**
+     * Dumps debug data and terminates script execution.
+     *
+     * @param mixed $data Data to inspect.
+     * @return void
+     */
     public function debug($data) {
         echo '<pre>' . var_export($data, true) . '</pre>';
         exit();

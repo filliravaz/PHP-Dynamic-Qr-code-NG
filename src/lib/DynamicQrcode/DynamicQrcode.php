@@ -11,14 +11,15 @@ if (QRCODE_GENERATOR === "external-api.qrserver.com") {
 class DynamicQrcode {
     private Qrcode $qrcode_instance;
     /**
-     *
+     * DynamicQrcode constructor.
+     * Initializes the underlying Qrcode generator instance for dynamic QR codes.
      */
     public function __construct() {
         $this->qrcode_instance = new Qrcode("dynamic");
     }
 
     /**
-     *
+     * DynamicQrcode destructor.
      */
     public function __destruct() {
     }
@@ -43,6 +44,12 @@ class DynamicQrcode {
         return $ordering;
     }
 
+    /**
+     * Retrieves a dynamic QR code database record by its ID.
+     *
+     * @param int|string $id The QR code database identifier.
+     * @return array The associative array containing QR code record data.
+     */
     public function getQrcode($id) {
         return $this->qrcode_instance->getQrcode($id);
     }
@@ -159,6 +166,12 @@ class DynamicQrcode {
     	exit();
     }
 
+    /**
+     * Dumps debug data and terminates script execution.
+     *
+     * @param mixed $data Data to inspect.
+     * @return void
+     */
     public function debug($data) {
         echo '<pre>' . var_export($data, true) . '</pre>';
         exit();

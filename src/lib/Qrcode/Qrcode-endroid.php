@@ -24,6 +24,11 @@ class Qrcode {
     private string $redirect_url;
     private ?string $uploadedLogoPath = null;
 
+    /**
+     * Initializes the QR code generator with the target mode ('static' or 'dynamic').
+     *
+     * @param string $type The mode of QR code generation ('static' or 'dynamic').
+     */
     public function __construct(string $type) {
         if ($type === "static") {
             $this->table = "static_qrcodes";
@@ -37,10 +42,19 @@ class Qrcode {
         }
     }
 
+    /**
+     * Destructor to clean up any temporary uploaded logo files left on disk.
+     */
     public function __destruct() {
         $this->cleanupUploadedLogo();
     }
 
+    /**
+     * Sanitizes a user-supplied filename, stripping dangerous characters and path traversal components.
+     *
+     * @param string $filename The raw input filename.
+     * @return string The sanitized filename.
+     */
     public function sanitizeFilename(string $filename): string {
         $clean = basename(trim($filename));
         $clean = preg_replace('/[^a-zA-Z0-9_\-\s]/', '', $clean);
@@ -48,12 +62,25 @@ class Qrcode {
         return trim($clean) !== '' ? trim($clean) : 'qrcode_' . time();
     }
 
+    /**
+     * Constructs a safe, normalized filesystem path for a QR code image file.
+     *
+     * @param string $filename The base filename.
+     * @param string $ext The file extension (e.g. 'png', 'svg', 'webp', 'jpg').
+     * @return string The full destination file path.
+     */
     public function getSafeFilePath(string $filename, string $ext): string {
         $safeName = $this->sanitizeFilename($filename);
         $safeExt = preg_replace('/[^a-zA-Z0-9]/', '', strtolower($ext));
         return SAVED_QRCODE_DIRECTORY . $safeName . '.' . $safeExt;
     }
 
+    /**
+     * Fetches a single QR code record by its ID from the configured database table.
+     *
+     * @param int|string $id The QR code database identifier.
+     * @return array The associative array containing QR code record data.
+     */
     public function getQrcode($id) {
         $db = getDbInstance();
         $db->where('id', (int)$id);
@@ -66,6 +93,13 @@ class Qrcode {
         $this->failure("Qrcode not found");
     }
 
+    /**
+     * Converts a hexadecimal color string (#RRGGBB or RRGGBB) to an RGB associative array.
+     *
+     * @param string $hex The hex color string.
+     * @param array $default Default RGB array to return if parsing fails.
+     * @return array Associative array with keys 'r', 'g', and 'b'.
+     */
     private function hexToRgb(string $hex, array $default = ['r' => 0, 'g' => 0, 'b' => 0]): array {
         $hex = ltrim(trim($hex), '#');
         if (preg_match('/^[a-f\d]{6}$/i', $hex)) {
@@ -78,6 +112,12 @@ class Qrcode {
         return $default;
     }
 
+    /**
+     * Normalizes and validates QR code generation options from raw input data.
+     *
+     * @param array $input_data Array of raw input parameters from form submission.
+     * @return array Associative array of validated rendering and styling options.
+     */
     private function setOptions(array $input_data): array {
         $errorCorrectionLevel = 'M';
         if (isset($input_data['level']) && in_array(strtoupper($input_data['level']), ['L', 'M', 'Q', 'H'], true)) {
@@ -89,6 +129,13 @@ class Qrcode {
             $size = min(max((int)$input_data['size'], 100), 2000);
         }
 
+        /**
+         * Normalizes a hex color string to 6 lowercase hex characters without leading '#'.
+         *
+         * @param mixed $color The raw color input.
+         * @param string $default Fallback hex code.
+         * @return string Normalized hex code.
+         */
         $normalizeColor = function($color, $default) {
             if (!is_string($color)) {
                 return $default;
@@ -527,6 +574,14 @@ class Qrcode {
         return $im;
     }
 
+    /**
+     * Generates a new QR code image, applies raster or vector styling, and persists the record to the database.
+     *
+     * @param array $input_data Rendering options and form parameters.
+     * @param array $data_to_db Database record columns to insert.
+     * @param string $data_to_qrcode URL-encoded payload to encode into QR code.
+     * @return void
+     */
     public function addQrcode(array $input_data, array $data_to_db, string $data_to_qrcode): void {
         $options = $this->setOptions($input_data);
 
@@ -749,6 +804,13 @@ class Qrcode {
         }
     }
 
+    /**
+     * Updates an existing QR code record in the database and renames associated files if necessary.
+     *
+     * @param array $input_data Raw form input containing ID and update fields.
+     * @param array $data_to_db Columns to update in the database.
+     * @return void
+     */
     public function editQrcode(array $input_data, array $data_to_db): void {
         $db = getDbInstance();
         $old_qrcode = $this->getQrcode($input_data["id"]);
@@ -794,6 +856,13 @@ class Qrcode {
         }
     }
 
+    /**
+     * Safely deletes a QR code database record and removes the corresponding image file from disk.
+     *
+     * @param int $id ID of the QR code to delete.
+     * @param bool $async Whether the deletion request is asynchronous (suppresses flash message).
+     * @return void
+     */
     public function deleteQrcode(int $id, bool $async = false): void {
         $db = getDbInstance();
         $qrcode = $this->getQrcode($id);
@@ -830,6 +899,11 @@ class Qrcode {
         }
     }
 
+    /**
+     * Cleans up temporary uploaded logo file if present on disk.
+     *
+     * @return void
+     */
     private function cleanupUploadedLogo(): void {
         if ($this->uploadedLogoPath !== null && file_exists($this->uploadedLogoPath)) {
             @unlink($this->uploadedLogoPath);
@@ -837,6 +911,12 @@ class Qrcode {
         }
     }
 
+    /**
+     * Sets a session failure flash message and redirects to the target listing URL.
+     *
+     * @param string $message The failure message to display.
+     * @return void
+     */
     private function failure(string $message): void {
         $this->cleanupUploadedLogo();
         $_SESSION['failure'] = $message;
@@ -844,6 +924,12 @@ class Qrcode {
         exit();
     }
 
+    /**
+     * Sets a session success flash message and redirects to the target listing URL.
+     *
+     * @param string $message The success message to display.
+     * @return void
+     */
     private function success(string $message): void {
         $this->cleanupUploadedLogo();
         $_SESSION['success'] = $message;
@@ -851,6 +937,12 @@ class Qrcode {
         exit();
     }
 
+    /**
+     * Sets a session info flash message and redirects to the target listing URL.
+     *
+     * @param string $message The information message to display.
+     * @return void
+     */
     private function info(string $message): void {
         $_SESSION['info'] = $message;
         header('Location: ' . $this->redirect_url);
