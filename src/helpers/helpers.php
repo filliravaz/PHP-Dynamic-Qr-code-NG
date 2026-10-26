@@ -422,7 +422,7 @@ function recordLoginAttempt($username, $ip) {
  * Clear recorded attempts on successful authentication.
  */
 function clearLoginAttempts($username, $ip = null) {
-    if ((empty($username) || !is_string($username) || trim($username) === '') && empty($ip)) {
+    if ((!is_string($username) || trim($username) === '') && (!is_string($ip) || trim($ip) === '')) {
         return;
     }
 

@@ -686,6 +686,8 @@ class Qrcode {
                 }
 
                 if ($fileExt === 'svg') {
+                    $options['eyeOuter'] = '';
+                    $options['eyeInner'] = '';
                     $writer = new SvgWriter();
                     $qrCode = new EndroidQrCode(
                         data: $payload,
@@ -797,6 +799,12 @@ class Qrcode {
                         $pX = $vbMinX + (($vbW - $dim) / 2);
                         $pY = $vbMinY + (($vbH - $dim) / 2);
                         $punchDef = '<rect x="' . $pX . '" y="' . $pY . '" width="' . $dim . '" height="' . $dim . '" rx="8" ry="8" fill="#' . $options['background'] . '"/>';
+                        $svgContent = preg_replace('/(<image\b)/i', $punchDef . '$1', $svgContent, 1);
+                    } elseif ($options['logoShape'] === 'square') {
+                        $dim = ($vbW * $options['logoScale']) + 12;
+                        $pX = $vbMinX + (($vbW - $dim) / 2);
+                        $pY = $vbMinY + (($vbH - $dim) / 2);
+                        $punchDef = '<rect x="' . $pX . '" y="' . $pY . '" width="' . $dim . '" height="' . $dim . '" fill="#' . $options['background'] . '"/>';
                         $svgContent = preg_replace('/(<image\b)/i', $punchDef . '$1', $svgContent, 1);
                     }
 

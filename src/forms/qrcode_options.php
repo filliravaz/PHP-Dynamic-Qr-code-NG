@@ -4,28 +4,28 @@ $optUid = 'opt_' . bin2hex(random_bytes(4));
 <div class="col-sm-12 mb-3">
     <div class="row">
         <div class="col-6 col-md-3">
-            <label>Foreground Color</label>
+            <label for="fg_<?php echo $optUid; ?>">Foreground Color</label>
             <div class="input-group my-colorpicker2">
                 <div class="input-group-prepend">
                     <span class="input-group-text"><i class="fas fa-square" style="color: #000000;"></i></span>
                 </div>
-                <input type="text" class="form-control input-foreground" name="foreground" value="#000000">
+                <input type="text" id="fg_<?php echo $optUid; ?>" class="form-control input-foreground" name="foreground" value="#000000">
             </div>
         </div>
 
         <div class="col-6 col-md-3">
-            <label>Background Color</label>
+            <label for="bg_<?php echo $optUid; ?>">Background Color</label>
             <div class="input-group my-colorpicker2">
                 <div class="input-group-prepend">
                     <span class="input-group-text"><i class="fas fa-square" style="color: #ffffff;"></i></span>
                 </div>
-                <input type="text" class="form-control input-background" name="background" value="#ffffff">
+                <input type="text" id="bg_<?php echo $optUid; ?>" class="form-control input-background" name="background" value="#ffffff">
             </div>
         </div>
 
         <div class="col-6 col-md-3">
-            <label>Precision / ECC</label>
-            <select name="level" class="form-control select-level">
+            <label for="level_<?php echo $optUid; ?>">Precision / ECC</label>
+            <select name="level" id="level_<?php echo $optUid; ?>" class="form-control select-level">
                 <option value="L">L - Low (7% recovery)</option>
                 <option value="M" selected>M - Medium (15% recovery)</option>
                 <option value="Q">Q - High (25% recovery)</option>
@@ -34,8 +34,8 @@ $optUid = 'opt_' . bin2hex(random_bytes(4));
         </div>
 
         <div class="col-6 col-md-3">
-            <label>Size (px)</label>
-            <select name="size" class="form-control select-size">
+            <label for="size_<?php echo $optUid; ?>">Size (px)</label>
+            <select name="size" id="size_<?php echo $optUid; ?>" class="form-control select-size">
                 <option value="150">150</option>
                 <option value="200">200</option>
                 <option value="300" selected>300</option>
@@ -61,28 +61,28 @@ $optUid = 'opt_' . bin2hex(random_bytes(4));
         <div class="card-body py-3">
             <div class="row">
                 <div class="col-12 col-md-3 mb-2">
-                    <label class="text-sm">Color Mode</label>
-                    <select name="gradient_type" class="form-control select-gradient-type" onchange="window.updateQrGradientVisibility && window.updateQrGradientVisibility()">
+                    <label class="text-sm" for="gradient_type_<?php echo $optUid; ?>">Color Mode</label>
+                    <select name="gradient_type" id="gradient_type_<?php echo $optUid; ?>" class="form-control select-gradient-type" onchange="window.updateQrGradientVisibility && window.updateQrGradientVisibility()">
                         <option value="none" selected>Solid Single Color</option>
                         <option value="linear">Linear Gradient (Dual Color)</option>
                         <option value="radial">Radial Gradient (Center Outward)</option>
                     </select>
                 </div>
                 <div class="col-12 col-md-3 mb-2 gradient-color-group" style="display: none;">
-                    <label class="text-sm">Gradient Secondary Color</label>
+                    <label class="text-sm" for="gradient_color_<?php echo $optUid; ?>">Gradient Secondary Color</label>
                     <div class="input-group my-colorpicker2">
                         <div class="input-group-prepend">
                             <span class="input-group-text"><i class="fas fa-square" style="color: #007bff;"></i></span>
                         </div>
-                        <input type="text" class="form-control input-gradient-color" name="gradient_color" value="#007bff">
+                        <input type="text" id="gradient_color_<?php echo $optUid; ?>" class="form-control input-gradient-color" name="gradient_color" value="#007bff">
                     </div>
                 </div>
                 <div class="col-12 col-md-3 mb-2 gradient-rotation-group" style="display: none;">
                     <div class="d-flex justify-content-between">
-                        <label class="text-sm">Rotation Angle</label>
+                        <label class="text-sm" for="gradient_angle_<?php echo $optUid; ?>">Rotation Angle</label>
                         <span class="badge badge-info gradient-angle-val text-xs align-self-center">45°</span>
                     </div>
-                    <input type="range" class="custom-range input-gradient-angle" name="gradient_angle" min="0" max="360" step="5" value="45">
+                    <input type="range" id="gradient_angle_<?php echo $optUid; ?>" class="custom-range input-gradient-angle" name="gradient_angle" min="0" max="360" step="5" value="45">
                     <div class="btn-group btn-group-toggle w-100 mt-1">
                         <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-angle" data-angle="0">0°</button>
                         <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-angle" data-angle="45">45°</button>
@@ -93,10 +93,10 @@ $optUid = 'opt_' . bin2hex(random_bytes(4));
                 </div>
                 <div class="col-12 col-md-3 mb-2 gradient-balance-group" style="display: none;">
                     <div class="d-flex justify-content-between">
-                        <label class="text-sm">Gradient Balance</label>
+                        <label class="text-sm" for="gradient_balance_<?php echo $optUid; ?>">Gradient Balance</label>
                         <span class="badge badge-secondary gradient-balance-val text-xs align-self-center">50%</span>
                     </div>
-                    <input type="range" class="custom-range input-gradient-balance" name="gradient_balance" min="10" max="90" step="1" value="50">
+                    <input type="range" id="gradient_balance_<?php echo $optUid; ?>" class="custom-range input-gradient-balance" name="gradient_balance" min="10" max="90" step="1" value="50">
                     <div class="d-flex justify-content-between text-muted" style="font-size: 10px;">
                         <span>Color 1</span>
                         <span>Equal (50%)</span>
@@ -114,21 +114,21 @@ $optUid = 'opt_' . bin2hex(random_bytes(4));
                 </div>
                 <div class="row custom-eyes-group" style="display: none;">
                     <div class="col-12 col-md-6 mb-2">
-                        <label class="text-sm">Outer Eye / Corner Frame Color</label>
+                        <label class="text-sm" for="eye_outer_<?php echo $optUid; ?>">Outer Eye / Corner Frame Color</label>
                         <div class="input-group my-colorpicker2">
                             <div class="input-group-prepend">
                                 <span class="input-group-text"><i class="fas fa-square" style="color: #000000;"></i></span>
                             </div>
-                            <input type="text" class="form-control input-eye-outer" name="eye_outer" value="#000000">
+                            <input type="text" id="eye_outer_<?php echo $optUid; ?>" class="form-control input-eye-outer" name="eye_outer" value="#000000">
                         </div>
                     </div>
                     <div class="col-12 col-md-6 mb-2">
-                        <label class="text-sm">Inner Eye / Pupil Dot Color</label>
+                        <label class="text-sm" for="eye_inner_<?php echo $optUid; ?>">Inner Eye / Pupil Dot Color</label>
                         <div class="input-group my-colorpicker2">
                             <div class="input-group-prepend">
                                 <span class="input-group-text"><i class="fas fa-square" style="color: #000000;"></i></span>
                             </div>
-                            <input type="text" class="form-control input-eye-inner" name="eye_inner" value="#000000">
+                            <input type="text" id="eye_inner_<?php echo $optUid; ?>" class="form-control input-eye-inner" name="eye_inner" value="#000000">
                         </div>
                     </div>
                 </div>
@@ -148,16 +148,16 @@ $optUid = 'opt_' . bin2hex(random_bytes(4));
         <div class="card-body py-3">
             <div class="row">
                 <div class="col-12 col-md-3 mb-2">
-                    <label class="text-sm">Block / Module Style</label>
-                    <select name="round_block" class="form-control select-round-block">
+                    <label class="text-sm" for="round_block_<?php echo $optUid; ?>">Block / Module Style</label>
+                    <select name="round_block" id="round_block_<?php echo $optUid; ?>" class="form-control select-round-block">
                         <option value="margin" selected>Square (Standard)</option>
                         <option value="shrink">Dots / Circles</option>
                         <option value="rounded">Rounded Modules</option>
                     </select>
                 </div>
                 <div class="col-12 col-md-3 mb-2">
-                    <label class="text-sm">Emblem Shape</label>
-                    <select name="logo_shape" class="form-control select-logo-shape">
+                    <label class="text-sm" for="logo_shape_<?php echo $optUid; ?>">Emblem Shape</label>
+                    <select name="logo_shape" id="logo_shape_<?php echo $optUid; ?>" class="form-control select-logo-shape">
                         <option value="circle" selected>Circle / Round</option>
                         <option value="rounded">Rounded Square</option>
                         <option value="square">Square</option>
@@ -165,17 +165,17 @@ $optUid = 'opt_' . bin2hex(random_bytes(4));
                     </select>
                 </div>
                 <div class="col-12 col-md-3 mb-2">
-                    <label class="text-sm">Custom Logo Upload</label>
+                    <label class="text-sm" for="logo_file_<?php echo $optUid; ?>">Custom Logo Upload</label>
                     <div class="custom-file">
                         <input type="hidden" name="MAX_FILE_SIZE" value="5242880">
-                        <input type="file" class="custom-file-input input-logo-file" name="logo_file" accept="image/png,image/jpeg,image/webp">
-                        <label class="custom-file-label text-truncate">Choose image...</label>
+                        <input type="file" id="logo_file_<?php echo $optUid; ?>" class="custom-file-input input-logo-file" name="logo_file" accept="image/png,image/jpeg,image/webp">
+                        <label class="custom-file-label text-truncate" for="logo_file_<?php echo $optUid; ?>">Choose image...</label>
                     </div>
                     <small class="text-muted">PNG, JPG or WebP (max 5MB)</small>
                 </div>
                 <div class="col-12 col-md-3 mb-2">
-                    <label class="text-sm">Logo Scale: <strong class="logo-scale-value">20%</strong></label>
-                    <input type="range" class="custom-range input-logo-scale" name="logo_scale" min="15" max="35" value="20" step="1">
+                    <label class="text-sm" for="logo_scale_<?php echo $optUid; ?>">Logo Scale: <strong class="logo-scale-value">20%</strong></label>
+                    <input type="range" id="logo_scale_<?php echo $optUid; ?>" class="custom-range input-logo-scale" name="logo_scale" min="15" max="35" value="20" step="1">
                     <small class="text-muted">Auto-elevates ECC to High for scanability</small>
                 </div>
             </div>
@@ -236,15 +236,15 @@ $optUid = 'opt_' . bin2hex(random_bytes(4));
     <div class="row">
         <div class="col-sm-6">
             <div class="form-group">
-                <label>Filename *</label>
-                <input type="text" name="filename" value="" placeholder="My QR Code" class="form-control input-filename" required="required">
+                <label for="filename_<?php echo $optUid; ?>">Filename *</label>
+                <input type="text" id="filename_<?php echo $optUid; ?>" name="filename" value="" placeholder="My QR Code" class="form-control input-filename" required="required">
             </div>
         </div>
 
         <div class="col-sm-3 col-6">
             <div class="form-group">
-                <label>Format *</label>
-                <select name="format" class="form-control select-format" required="required">
+                <label for="format_<?php echo $optUid; ?>">Format *</label>
+                <select name="format" id="format_<?php echo $optUid; ?>" class="form-control select-format" required="required">
                     <option value="png" selected>PNG</option>
                     <option value="svg">SVG</option>
                     <option value="webp">WebP</option>
@@ -256,8 +256,8 @@ $optUid = 'opt_' . bin2hex(random_bytes(4));
         <?php if(isset($_SESSION['type']) && $_SESSION['type'] === 'super'): ?>
         <div class="col-sm-3 col-6">
             <div class="form-group">
-                <label>Owner *</label>
-                <select name="id_owner" class="form-control">
+                <label for="id_owner_<?php echo $optUid; ?>">Owner *</label>
+                <select name="id_owner" id="id_owner_<?php echo $optUid; ?>" class="form-control">
                     <option value="" selected>All</option>
                     <?php
                     require_once BASE_PATH . '/lib/Users/Users.php';

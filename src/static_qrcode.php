@@ -36,7 +36,43 @@ if($_SERVER["REQUEST_METHOD"] === "POST") {
     } else {
         // CSRF token is validated above for all static QR type submissions
         // Each form template under src/forms/static/ provides a hidden csrf_token field
-        switch($_GET['type'] ?? ''){
+        $type = $_GET['type'] ?? '';
+        $typeFields = [
+            'text'     => ['text'],
+            'email'    => ['email', 'subject', 'message'],
+            'phone'    => ['country_code', 'phone_number'],
+            'sms'      => ['country_code', 'phone_number', 'message'],
+            'whatsapp' => ['country_code', 'phone_number', 'message'],
+            'skype'    => ['skype_username'],
+            'location' => ['latitude', 'longitude'],
+            'vcard'    => ['full_name', 'nickname', 'email', 'website', 'phone', 'home_phone', 'work_phone', 'company', 'role', 'categories', 'note', 'photo', 'address', 'city', 'post_code', 'state'],
+            'event'    => ['title', 'start', 'end', 'timezone', 'location', 'description', 'url'],
+            'bookmark' => ['url', 'title'],
+            'wifi'     => ['encryption', 'ssid', 'password'],
+            'paypal'   => ['payment_type', 'email', 'item_name', 'item_id', 'amount', 'currency', 'shipping', 'tax_rate'],
+            'bitcoin'  => ['address', 'amount', 'label', 'message'],
+            '2fa'      => ['algorithms', 'secret', 'label', 'issuer'],
+            'telegram' => ['username', 'message'],
+            'social'   => ['platform', 'username', 'custom_url'],
+            'crypto'   => ['currency', 'address', 'amount', 'message'],
+            'sepa'     => ['name', 'iban', 'bic', 'amount', 'remittance'],
+            'pix'      => ['pix_key', 'merchant_name', 'merchant_city', 'amount', 'txid'],
+            'meeting'  => ['platform', 'meeting_id', 'password', 'url'],
+            'mecard'   => ['name', 'reading', 'tel', 'email', 'memo', 'address', 'url'],
+            'medical'  => ['name', 'blood_type', 'allergies', 'medications', 'emergency_contact', 'notes'],
+        ];
+
+        if (isset($typeFields[$type])) {
+            foreach ($typeFields[$type] as $field) {
+                if (isset($_POST[$field]) && !is_scalar($_POST[$field])) {
+                    $_SESSION['failure'] = 'Invalid input provided.';
+                    header('Location: static_qrcodes.php');
+                    exit();
+                }
+            }
+        }
+
+        switch($type){
             case 'text':         $static_qrcode_instance->textQrcode($_POST['text']);
                 break;
 
@@ -88,15 +124,7 @@ if($_SERVER["REQUEST_METHOD"] === "POST") {
             case 'crypto':       $static_qrcode_instance->cryptoQrcode($_POST['currency'] ?? '', $_POST['address'] ?? '', $_POST['amount'] ?? '', $_POST['message'] ?? '');
                 break;
 
-            case 'sepa':
-                foreach (['name', 'iban', 'bic', 'amount', 'remittance'] as $sepaField) {
-                    if (isset($_POST[$sepaField]) && !is_scalar($_POST[$sepaField])) {
-                        $_SESSION['failure'] = 'Invalid SEPA field provided.';
-                        header('Location: static_qrcodes.php');
-                        exit();
-                    }
-                }
-                $static_qrcode_instance->sepaQrcode($_POST['name'] ?? '', $_POST['iban'] ?? '', $_POST['bic'] ?? '', $_POST['amount'] ?? '', $_POST['remittance'] ?? '');
+            case 'sepa':         $static_qrcode_instance->sepaQrcode($_POST['name'] ?? '', $_POST['iban'] ?? '', $_POST['bic'] ?? '', $_POST['amount'] ?? '', $_POST['remittance'] ?? '');
                 break;
 
             case 'pix':          $static_qrcode_instance->pixQrcode($_POST['pix_key'] ?? '', $_POST['merchant_name'] ?? '', $_POST['merchant_city'] ?? '', $_POST['amount'] ?? '', $_POST['txid'] ?? '');

@@ -9,17 +9,46 @@
     // -------------------------------------------------------------
     // Compact Embedded Client-side QRCode Generator (Kazuhiko Arase)
     // -------------------------------------------------------------
+    function stringToUtf8Bytes(str) {
+        if (typeof TextEncoder !== 'undefined') {
+            return Array.from(new TextEncoder().encode(str));
+        }
+        var bytes = [];
+        for (var i = 0; i < str.length; i++) {
+            var code = str.charCodeAt(i);
+            if (code < 0x80) {
+                bytes.push(code);
+            } else if (code < 0x800) {
+                bytes.push(0xc0 | (code >> 6));
+                bytes.push(0x80 | (code & 0x3f));
+            } else if (code < 0xd800 || code >= 0xe000) {
+                bytes.push(0xe0 | (code >> 12));
+                bytes.push(0x80 | ((code >> 6) & 0x3f));
+                bytes.push(0x80 | (code & 0x3f));
+            } else {
+                i++;
+                code = 0x10000 + (((code & 0x3ff) << 10) | (str.charCodeAt(i) & 0x3ff));
+                bytes.push(0xf0 | (code >> 18));
+                bytes.push(0x80 | ((code >> 12) & 0x3f));
+                bytes.push(0x80 | ((code >> 6) & 0x3f));
+                bytes.push(0x80 | (code & 0x3f));
+            }
+        }
+        return bytes;
+    }
+
     function QR8bitByte(data) {
         this.mode = 4;
         this.data = data;
+        this.bytes = stringToUtf8Bytes(data);
     }
     QR8bitByte.prototype = {
         getLength: function () {
-            return this.data.length;
+            return this.bytes.length;
         },
         write: function (buffer) {
-            for (var i = 0; i < this.data.length; i++) {
-                buffer.put(this.data.charCodeAt(i), 8);
+            for (var i = 0; i < this.bytes.length; i++) {
+                buffer.put(this.bytes[i], 8);
             }
         }
     };
@@ -484,6 +513,7 @@
     var customLogoDataUrl = null;
     var presetLogoName = '';
     var renderTimer = null;
+    var renderSequence = 0;
 
     function toValidColor(color, fallback) {
         if (!color || typeof color !== 'string') return fallback;
@@ -667,6 +697,8 @@
         if (!canvas) return;
         var ctx = canvas.getContext('2d');
         var data = extractFormData();
+        renderSequence++;
+        var currentSequence = renderSequence;
 
         // Update live info labels
         $('#preview-size-label').text(data.size + ' x ' + data.size + ' px');
@@ -720,6 +752,10 @@
             ecc = QRErrorCorrectLevel.H;
         }
 
+        var canvasSize = 240; // High resolution display
+        canvas.width = canvasSize;
+        canvas.height = canvasSize;
+
         // Generate matrix
         var qr;
         try {
@@ -727,19 +763,25 @@
             qr.addData(data.payload);
             qr.make();
         } catch (e) {
-            try {
-                qr = new QRCodeModel(4, QRErrorCorrectLevel.L);
-                qr.addData(data.payload.substring(0, 100));
-                qr.make();
-            } catch (err) {
-                return;
-            }
+            // Oversized or unsupported payload: do not truncate data to avoid misleading QR preview
+            canvas.dataset.hasError = 'true';
+            ctx.fillStyle = data.background;
+            ctx.fillRect(0, 0, canvasSize, canvasSize);
+            ctx.fillStyle = data.foreground;
+            ctx.font = 'bold 12px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('Payload exceeds preview size', canvasSize / 2, (canvasSize / 2) - 10);
+            ctx.font = '11px sans-serif';
+            ctx.fillText('Full QR generated on submit', canvasSize / 2, (canvasSize / 2) + 12);
+            $('#btn-download-preview').prop('disabled', true);
+            return;
         }
 
+        delete canvas.dataset.hasError;
+        $('#btn-download-preview').prop('disabled', false);
+
         var moduleCount = qr.getModuleCount();
-        var canvasSize = 240; // High resolution display
-        canvas.width = canvasSize;
-        canvas.height = canvasSize;
 
         // Background
         ctx.fillStyle = data.background;
@@ -849,11 +891,15 @@
         }
 
         // Draw Center Emblem / Logo if active
-        var logoSource = customLogoDataUrl || (presetLogoName ? 'dist/img/presets/' + presetLogoName + '.svg?v=' + (window.__qrAssetVersion || Date.now()) : null);
+        var presetVersion = window.__qrAssetVersion || '1.0';
+        var logoSource = customLogoDataUrl || (presetLogoName ? 'dist/img/presets/' + presetLogoName + '.svg?v=' + presetVersion : null);
         if (logoSource) {
             var logoImg = new Image();
             logoImg.crossOrigin = 'anonymous';
             logoImg.onload = function () {
+                if (currentSequence !== renderSequence) {
+                    return;
+                }
                 var logoPixelSize = Math.round(canvasSize * (data.logoScale / 100));
                 var logoX = (canvasSize - logoPixelSize) / 2;
                 var logoY = (canvasSize - logoPixelSize) / 2;
@@ -1092,7 +1138,7 @@
         // Download Preview button
         $('#btn-download-preview').on('click', function () {
             var canvas = document.getElementById('qr-preview-canvas');
-            if (!canvas) return;
+            if (!canvas || canvas.dataset.hasError === 'true') return;
             var dataUrl = canvas.toDataURL('image/png');
             var link = document.createElement('a');
             var fn = ($('.input-filename').val() || 'qr_preview').trim().replace(/[^a-zA-Z0-9_\-]/g, '_');
