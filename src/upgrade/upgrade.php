@@ -432,10 +432,11 @@ if ($dynTableCheck && $dynTableCheck->num_rows > 0) {
             while ($row = $rowsRes->fetch_assoc()) {
                 $rawId = $row['identifier'];
                 $isValid = ($rawId !== null && $rawId !== '' && strlen($rawId) <= 32);
+                $normRawId = ($rawId !== null) ? strtolower(rtrim((string)$rawId)) : '';
 
-                if ($isValid && !isset($usedIdentifiers[$rawId])) {
+                if ($isValid && $normRawId !== '' && !isset($usedIdentifiers[$normRawId])) {
                     // Non-colliding, valid identifier: preserve existing identifier and link
-                    $usedIdentifiers[$rawId] = true;
+                    $usedIdentifiers[$normRawId] = true;
                 } else {
                     $recordsToFix[] = $row;
                 }
@@ -452,21 +453,25 @@ if ($dynTableCheck && $dynTableCheck->num_rows > 0) {
                     $origId = $rec['identifier'];
                     $recId = (int)$rec['id'];
                     $newId = null;
+                    $normNewId = null;
 
                     // If overlength, attempt to preserve prefix if it does not collide
                     if ($origId !== null && $origId !== '' && strlen($origId) > 32) {
                         $candidate = substr($origId, 0, 32);
-                        if (!isset($usedIdentifiers[$candidate])) {
+                        $normCandidate = strtolower(rtrim($candidate));
+                        if ($normCandidate !== '' && !isset($usedIdentifiers[$normCandidate])) {
                             $newId = $candidate;
+                            $normNewId = $normCandidate;
                         }
                     }
 
                     // Generate unique 16-hex character identifier if missing or colliding
-                    while ($newId === null || isset($usedIdentifiers[$newId])) {
+                    while ($newId === null || isset($usedIdentifiers[$normNewId])) {
                         $newId = bin2hex(random_bytes(8));
+                        $normNewId = strtolower(rtrim($newId));
                     }
 
-                    $usedIdentifiers[$newId] = true;
+                    $usedIdentifiers[$normNewId] = true;
 
                     if (!$upStmt->bind_param('si', $newId, $recId) || !$upStmt->execute()) {
                         $err = $upStmt->error;

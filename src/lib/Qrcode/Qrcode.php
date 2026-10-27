@@ -206,9 +206,17 @@ class Qrcode {
      * 
      */
     public function deleteQrcode($id, $async = false) {
+        $intId = filter_var($id, FILTER_VALIDATE_INT);
+        if ($intId === false || $intId <= 0) {
+            if (!$async) {
+                $this->failure('QR code not found.');
+            }
+            return;
+        }
+
         $db = getDbInstance();
 
-        $db->where('id', (int)$id);
+        $db->where('id', (int)$intId);
         $qrcode = $db->getOne($this->table);
         if (!$qrcode) {
             if (!$async) {
@@ -217,7 +225,7 @@ class Qrcode {
             return;
         }
 
-        $db->where('id', $id);
+        $db->where('id', (int)$intId);
         $status = $db->delete($this->table);
         
         $diskName = !empty($qrcode['qrcode']) ? basename($qrcode['qrcode']) : ($this->sanitizeFilename($qrcode['filename'] ?? '') . '.' . preg_replace('/[^a-zA-Z0-9]/', '', strtolower($qrcode['format'] ?? 'png')));

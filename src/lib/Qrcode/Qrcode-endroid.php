@@ -914,8 +914,15 @@ class Qrcode {
      * @return void
      */
     public function deleteQrcode(int $id, bool $async = false): void {
+        if ($id <= 0) {
+            if (!$async) {
+                $this->failure('QR code not found.');
+            }
+            return;
+        }
+
         $db = getDbInstance();
-        $db->where('id', (int)$id);
+        $db->where('id', $id);
         $qrcode = $db->getOne($this->table);
         if (!$qrcode) {
             if (!$async) {

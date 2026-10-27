@@ -390,12 +390,13 @@ class StaticQrcode {
             $maxDecimals = in_array($currencyUpper, $zeroDecimalCurrencies, true) ? 0 : 2;
 
             $cleanAmount = str_replace(',', '.', trim((string)$amount));
-            if (!is_numeric($cleanAmount) || (float)$cleanAmount < 0) {
+            if (!is_numeric($cleanAmount) || (float)$cleanAmount < 0 || !preg_match('/^\d+(?:\.\d+)?$/', $cleanAmount)) {
                 $this->failure('Invalid payment amount provided.');
             }
             $amountDecimals = 0;
             if (strpos($cleanAmount, '.') !== false) {
-                $amountDecimals = strlen(substr($cleanAmount, strpos($cleanAmount, '.') + 1));
+                $fractional = substr($cleanAmount, strpos($cleanAmount, '.') + 1);
+                $amountDecimals = strlen(rtrim($fractional, '0'));
             }
             if ($amountDecimals > $maxDecimals) {
                 $this->failure("Amount exceeds maximum allowed decimal places ({$maxDecimals}) for currency {$currencyUpper}.");
@@ -403,12 +404,13 @@ class StaticQrcode {
 
             $cleanShipping = ($shipping !== null && trim((string)$shipping) !== '') ? str_replace(',', '.', trim((string)$shipping)) : '';
             if ($cleanShipping !== '') {
-                if (!is_numeric($cleanShipping) || (float)$cleanShipping < 0) {
+                if (!is_numeric($cleanShipping) || (float)$cleanShipping < 0 || !preg_match('/^\d+(?:\.\d+)?$/', $cleanShipping)) {
                     $this->failure('Invalid shipping amount provided.');
                 }
                 $shippingDecimals = 0;
                 if (strpos($cleanShipping, '.') !== false) {
-                    $shippingDecimals = strlen(substr($cleanShipping, strpos($cleanShipping, '.') + 1));
+                    $fractional = substr($cleanShipping, strpos($cleanShipping, '.') + 1);
+                    $shippingDecimals = strlen(rtrim($fractional, '0'));
                 }
                 if ($shippingDecimals > $maxDecimals) {
                     $this->failure("Shipping exceeds maximum allowed decimal places ({$maxDecimals}) for currency {$currencyUpper}.");

@@ -210,7 +210,7 @@ class Users
             $db->setQueryOption('FOR UPDATE');
             $db->where('type', 'super');
             $superCount = $db->getValue('users', 'count(*)');
-            if ($superCount !== null && (int)$superCount <= 1) {
+            if ($superCount === null || (int)$superCount <= 1) {
                 $db->rollback();
                 $this->failure('Cannot demote the last superadmin account.', $location);
             }
@@ -268,7 +268,7 @@ class Users
             $db->setQueryOption('FOR UPDATE');
             $db->where('type', 'super');
             $superCount = $db->getValue('users', 'count(*)');
-            if ($superCount !== null && (int)$superCount <= 1) {
+            if ($superCount === null || (int)$superCount <= 1) {
                 $db->rollback();
                 $this->failure('Cannot delete the last superadmin account.');
             }
