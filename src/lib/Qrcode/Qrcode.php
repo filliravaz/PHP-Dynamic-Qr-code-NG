@@ -169,28 +169,12 @@ class Qrcode {
         $old_qrcode = $this->getQrcode($input_data["id"]);
 
         $data_to_db['filename'] = $this->sanitizeFilename($data_to_db['filename']);
-        $oldFormat = preg_replace('/[^a-zA-Z0-9]/', '', strtolower($old_qrcode["format"]));
-        $data_to_db['qrcode'] = $data_to_db['filename'] . '.' . $oldFormat;
+        // SEC-06: Preserve existing disk storage filename
+        $data_to_db['qrcode'] = !empty($old_qrcode['qrcode']) ? $old_qrcode['qrcode'] : ($data_to_db['filename'] . '.' . preg_replace('/[^a-zA-Z0-9]/', '', strtolower($old_qrcode['format'] ?? 'png')));
 
-        $oldFile = $this->getSafeFilePath($old_qrcode["filename"], $oldFormat);
-        $newFile = $this->getSafeFilePath($data_to_db['filename'], $oldFormat);
+        $db->where('id', (int)$input_data["id"]);
+        $stat = $db->update($this->table, $data_to_db);
 
-        if(!file_exists($newFile) || $newFile === $oldFile){
-            $db->where('id', $input_data["id"]);
-            $stat = $db->update($this->table, $data_to_db);
-            
-            if (file_exists($oldFile) && $oldFile !== $newFile) {
-                try{
-                    rename($oldFile, $newFile);
-                }
-                catch(Exception $e){
-                    $this->failure($e->getMessage());
-                }
-            }
-        }
-        else
-            $this->failure('You cannot edit a qr code with an existing name on the server!');
-        
         if ($stat){
             $this->success('Qr code updated successfully!');
         }
