@@ -125,7 +125,13 @@ class Qrcode {
             ];
             $url = 'https://api.qrserver.com/v1/create-qr-code/?' . http_build_query($queryParams);
 
-            $content = @file_get_contents($url);
+            $ctx = stream_context_create([
+                'http' => [
+                    'timeout' => 10,
+                    'ignore_errors' => true
+                ]
+            ]);
+            $content = @file_get_contents($url, false, $ctx);
             if ($content === false) {
                 $this->failure("Failed to retrieve QR code from external service.");
             }
@@ -208,14 +214,10 @@ class Qrcode {
         $db->where('id', $id);
         $status = $db->delete($this->table);
         
-        $filePath = $this->getSafeFilePath($qrcode["filename"], $qrcode["format"]);
+        $diskName = !empty($qrcode['qrcode']) ? basename($qrcode['qrcode']) : ($this->sanitizeFilename($qrcode['filename'] ?? '') . '.' . preg_replace('/[^a-zA-Z0-9]/', '', strtolower($qrcode['format'] ?? 'png')));
+        $filePath = SAVED_QRCODE_DIRECTORY . $diskName;
         if (file_exists($filePath)) {
-            try{
-                unlink($filePath);
-            }
-            catch(Exception $e){
-                $this->failure($e->getMessage());
-            }
+            @unlink($filePath);
         }
 
         if ($status)

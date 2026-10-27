@@ -5,14 +5,16 @@ services:
     environment:
       TYPE: "docker"
       QRCODE_GENERATOR: "internal-endroid.qrcode"
-      BASE_URL: "https://mydomain.com"
+      BASE_URL: "${BASE_URL:-http://localhost}"
+      FORCE_HTTPS: "${FORCE_HTTPS:-false}"
+      TRUSTED_PROXIES: "${TRUSTED_PROXIES:-}"
       DATABASE_HOST: "php-dynamic-qrcode-db"
       DATABASE_PORT: "3306"
       DATABASE_NAME: "${MYSQL_DATABASE:-qrcode}"
       DATABASE_USER: "${MYSQL_USER:-qrcode}"
       DATABASE_PASSWORD: "${MYSQL_PASSWORD:-changeme}"
-      DATABASE_PREFIX: ""
-      DATABASE_CHARSET: "utf8"
+      DATABASE_PREFIX: "${DATABASE_PREFIX:-}"
+      DATABASE_CHARSET: "${DATABASE_CHARSET:-utf8mb4}"
     ports:
       - 80:80
     depends_on:

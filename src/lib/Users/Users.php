@@ -1,61 +1,98 @@
 <?php
 require_once 'config/config.php';
 
+/**
+ * Class Users
+ *
+ * Manages user administrative accounts, role authorization, authentication records,
+ * and user lifecycle operations.
+ */
 class Users
 {
     /**
-     *
+     * Initializes a new Users instance.
      */
     public function __construct()
     {
     }
 
     /**
-     *
+     * Destructor for clean resource teardown.
      */
     public function __destruct()
     {
     }
     
     /**
-     * Set friendly columns\' names to order tables\' entries
+     * Returns friendly column display names for table ordering.
+     *
+     * @return array<string, string> Associative map of column names to display labels.
      */
-    public function setOrderingValues()
+    public function setOrderingValues(): array
     {
-        $ordering = [
+        return [
             'id' => 'ID',
             'username' => 'Username',
             'type' => 'Type'
         ];
-
-        return $ordering;
     }
 
-    public function getAllUsers() {
+    /**
+     * Retrieve all user records from the database.
+     *
+     * @return array List of user record associative arrays.
+     */
+    public function getAllUsers(): array
+    {
         $db = getDbInstance();
-        return $db->get('users');
+        $users = $db->get('users');
+        return is_array($users) ? $users : [];
     }
 
-    public function getUser($id) {
+    /**
+     * Retrieve a single user record by primary key ID.
+     *
+     * @param int|string $id The user database identifier.
+     * @return array|null The user record array if found, null otherwise.
+     */
+    public function getUser($id): ?array
+    {
         $db = getDbInstance();
-
-        $db->where('id', $id);
-        return $db->getOne('users');
+        $db->where('id', (int)$id);
+        $user = $db->getOne('users');
+        return is_array($user) ? $user : null;
     }
     
     /**
-     * Add user
+     * Create and insert a new user account with validated credentials and complexity rules.
+     *
+     * Enforces username regex format, password minimum length (SEC-05), and forces
+     * password change on initial login.
+     *
+     * @param array $input_data Form input parameters including username, password, and type.
+     * @return never
      */
-    public function addUser($input_data) {
+    public function addUser(array $input_data): void
+    {
         $allowedTypes = ['super', 'admin'];
         if (empty($input_data['type']) || !in_array($input_data['type'], $allowedTypes, true)) {
             $this->failure('Invalid user type.');
         }
 
+        $username = trim((string)($input_data['username'] ?? ''));
+        if (!preg_match('/^[a-zA-Z0-9_\-\.]{3,50}$/', $username)) {
+            $this->failure('Username must be 3-50 characters and contain only letters, digits, dots, hyphens, and underscores.');
+        }
+
+        $password = (string)($input_data['password'] ?? '');
+        if (strlen($password) < 8) {
+            $this->failure('Password must be at least 8 characters long.');
+        }
+
         $db = getDbInstance();
 
-        $data_to_db["username"] = $input_data["username"];
-        $data_to_db['password'] = password_hash($input_data['password'], PASSWORD_DEFAULT);
+        $data_to_db["username"] = $username;
+        $data_to_db['password'] = password_hash($password, PASSWORD_DEFAULT);
         $data_to_db["type"] = $input_data["type"];
         // Force newly created users to change their initial password on first login
         $data_to_db["must_change_password"] = 1;
@@ -64,68 +101,102 @@ class Users
         $db->where('username', $data_to_db['username']);
         $db->get('users');
 
-        if ($db->count >= 1)
+        if ($db->count >= 1) {
             $this->failure('Username already exists');
+        }
 
-	    $last_id = $db->insert('users', $data_to_db);
+        $last_id = $db->insert('users', $data_to_db);
 
-	    if ($last_id)
-		    $this->success('User added successfully');
+        if ($last_id) {
+            $this->success('User added successfully');
+        } else {
+            error_log('Failed to add User: ' . $db->getLastError());
+            $this->failure('Failed to add User.');
+        }
     }
     
     /**
-     * Edit user
-     * 
+     * Update an existing user account with role preservation, complexity validation, and session invalidation.
+     *
+     * Prevents self-demotion, last superadmin demotion (SEC-04), and validates password complexity (SEC-05).
+     *
+     * @param array $input_data Form input parameters including id, username, type, and optional password.
+     * @return never
      */
-    public function editUser($input_data) {
+    public function editUser(array $input_data): void
+    {
+        $userId = (int)($input_data["id"] ?? 0);
+        $queryString = http_build_query([
+            'id' => $userId,
+            'edit' => 'true',
+        ]);
+        $location = 'Location: user.php?' . $queryString;
+
         $allowedTypes = ['super', 'admin'];
         if (empty($input_data['type']) || !in_array($input_data['type'], $allowedTypes, true)) {
-            $query_string = http_build_query(array(
-                'id' => $input_data["id"] ?? '',
-                'edit' => "true",
-            ));
-            $this->failure('Invalid user type.', 'Location: user.php?'.$query_string);
+            $this->failure('Invalid user type.', $location);
+        }
+
+        $username = trim((string)($input_data['username'] ?? ''));
+        if (!preg_match('/^[a-zA-Z0-9_\-\.]{3,50}$/', $username)) {
+            $this->failure('Username must be 3-50 characters and contain only letters, digits, dots, hyphens, and underscores.', $location);
         }
 
         $db = getDbInstance();
 
-        $db->where('username', $input_data['username']);
-        $db->where('id', $input_data["id"], '!=');
+        $db->where('username', $username);
+        $db->where('id', $userId, '!=');
         $row = $db->getOne('users');
 
-        if (!empty($row['username']))  {
-            $query_string = http_build_query(array(
-                'id' => $input_data["id"],
-                'edit' => "true",
-            ));
-            $this->failure('Username already exists', 'Location: user.php?'.$query_string);
+        if (!empty($row['username'])) {
+            $this->failure('Username already exists', $location);
         }
 
-        $db->where('id', $input_data["id"]);
+        $db->where('id', $userId);
         $currentUser = $db->getOne('users');
+        if (!$currentUser) {
+            $this->failure('User not found.');
+        }
 
-        $data_to_db["username"] = $input_data["username"];
+        // SEC-04: Prevent self-demotion and last superadmin demotion
+        if (($currentUser['type'] ?? '') === 'super' && $input_data['type'] !== 'super') {
+            if (isset($_SESSION['user_id']) && (int)$_SESSION['user_id'] === $userId) {
+                $this->failure('You cannot demote your own account.', $location);
+            }
+            $db->where('type', 'super');
+            $superCount = $db->getValue('users', 'count(*)');
+            if ($superCount !== null && (int)$superCount <= 1) {
+                $this->failure('Cannot demote the last superadmin account.', $location);
+            }
+        }
+
+        $data_to_db["username"] = $username;
         $data_to_db["type"] = $input_data["type"];
 
-        $roleChanged = ($currentUser && isset($currentUser['type']) && $currentUser['type'] !== $input_data['type']);
+        $roleChanged = ($currentUser['type'] !== $input_data['type']);
         if ($roleChanged && empty($data_to_db['session_version'])) {
             $data_to_db['session_version'] = (int)($currentUser['session_version'] ?? 1) + 1;
-            if (isset($_SESSION['user_id']) && (int)$_SESSION['user_id'] === (int)$input_data['id']) {
+            if (isset($_SESSION['user_id']) && (int)$_SESSION['user_id'] === $userId) {
                 $_SESSION['session_version'] = $data_to_db['session_version'];
                 $_SESSION['type'] = $input_data['type'];
             }
         }
 
         if (!empty($input_data['password'])) {
-            $isSamePassword = (!empty($currentUser['password']) && password_verify($input_data['password'], $currentUser['password']));
+            $newPassword = (string)$input_data['password'];
+            if (strlen($newPassword) < 8) {
+                $this->failure('Password must be at least 8 characters long.', $location);
+            }
+
+            $isSamePassword = (!empty($currentUser['password']) && password_verify($newPassword, $currentUser['password']));
             if (!$isSamePassword) {
-                $data_to_db['password'] = password_hash($input_data['password'], PASSWORD_DEFAULT);
+                $data_to_db['password'] = password_hash($newPassword, PASSWORD_DEFAULT);
                 $data_to_db['series_id'] = null;
                 $data_to_db['remember_token'] = null;
                 $data_to_db['expires'] = null;
                 $data_to_db['session_version'] = (int)($currentUser['session_version'] ?? 1) + 1;
                 // When an administrator changes another user's password, force password change on next login
-                if (isset($_SESSION['user_id']) && (int)$_SESSION['user_id'] !== (int)$input_data['id']) {
+                if (isset($_SESSION['user_id']) && (int)$_SESSION['user_id'] !== $userId) {
                     $data_to_db["must_change_password"] = 1;
                 } else {
                     $data_to_db["must_change_password"] = 0;
@@ -137,8 +208,8 @@ class Users
             }
         }
 
-	    $db->where('id', $input_data["id"]);
-	    $stat = $db->update('users', $data_to_db);
+        $db->where('id', $userId);
+        $stat = $db->update('users', $data_to_db);
         
         if ($stat) {
             $this->success('User updated successfully!');
@@ -149,56 +220,96 @@ class Users
     }
     
     /**
-     * Delete user
-     * 
+     * Delete user account and reassign ownership of orphaned QR code resources.
+     *
+     * Prevents self-deletion and deletion of the last remaining superadmin account (SEC-04).
+     *
+     * @param int|string $id The user database identifier to delete.
+     * @return never
      */
-    public function deleteUser($id) {
-        if($_SESSION['type']!='super'){
+    public function deleteUser($id): void
+    {
+        if (empty($_SESSION['type']) || $_SESSION['type'] !== 'super') {
             header('HTTP/1.1 401 Unauthorized', true, 401);
             exit("401 Unauthorized");
+        }
+
+        $targetId = (int)$id;
+
+        // SEC-04: Prevent deleting own account
+        if (isset($_SESSION['user_id']) && (int)$_SESSION['user_id'] === $targetId) {
+            $this->failure('You cannot delete your own account.');
+        }
+
+        $userToDelete = $this->getUser($targetId);
+        if (!$userToDelete) {
+            $this->failure('User not found.');
+        }
+
+        // SEC-04: Prevent deleting last superadmin account
+        if (($userToDelete['type'] ?? '') === 'super') {
+            $db = getDbInstance();
+            $db->where('type', 'super');
+            $superCount = $db->getValue('users', 'count(*)');
+            if ($superCount !== null && (int)$superCount <= 1) {
+                $this->failure('Cannot delete the last superadmin account.');
+            }
         }
         
         $db = getDbInstance();
         // Disassociate orphaned QR codes before deleting user
-        $db->where('id_owner', $id);
+        $db->where('id_owner', $targetId);
         $db->update('dynamic_qrcodes', ['id_owner' => null]);
-        $db->where('id_owner', $id);
+        $db->where('id_owner', $targetId);
         $db->update('static_qrcodes', ['id_owner' => null]);
 
-        $db->where('id', $id);
+        $db->where('id', $targetId);
         $stat = $db->delete('users');
 
-        if ($stat)
+        if ($stat) {
             $this->info('User deleted successfully!');
-        else
+        } else {
             $this->failure('Unable to delete user');
+        }
     }
     
     /**
-     * Flash message Failure process
+     * Set failure flash message and redirect.
+     *
+     * @param string $message Flash error message.
+     * @param string $location HTTP redirect header location.
+     * @return never
      */
-    public function failure($message, $location = 'Location: users.php') {
+    public function failure(string $message, string $location = 'Location: users.php'): void
+    {
         $_SESSION['failure'] = $message;
         header($location);
-    	exit();
+        exit();
     }
     
     /**
-     * Flash message Success process
+     * Set success flash message and redirect to users listing.
+     *
+     * @param string $message Flash success message.
+     * @return never
      */
-    public function success($message) {
+    public function success(string $message): void
+    {
         $_SESSION['success'] = $message;
         header('Location: users.php');
-    	exit();
+        exit();
     }
     
     /**
-     * Flash message Info process
+     * Set informational flash message and redirect to users listing.
+     *
+     * @param string $message Flash informational message.
+     * @return never
      */
-    public function info($message) {
+    public function info(string $message): void
+    {
         $_SESSION['info'] = $message;
         header('Location: users.php');
-    	exit();
+        exit();
     }
 }
-?>

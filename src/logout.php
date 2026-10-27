@@ -1,11 +1,22 @@
 <?php
 require_once './config/config.php';
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// SEC-08: Protect logout against CSRF
+$token = $_POST['csrf_token'] ?? $_GET['csrf_token'] ?? null;
+if (!empty($_SESSION['user_logged_in'])) {
+    if (!$token || !validateCsrfToken($token, false)) {
+        header('Location: index.php');
+        exit;
+    }
+}
 
 $userId = $_SESSION['user_id'] ?? null;
 $seriesId = $_COOKIE['series_id'] ?? null;
 
-// SEC-04: Revoke persistent remember-me session in the database
+// Revoke persistent remember-me session in the database
 if ($userId || $seriesId) {
     try {
         $db = getDbInstance();

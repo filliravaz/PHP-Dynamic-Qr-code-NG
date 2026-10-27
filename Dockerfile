@@ -1,11 +1,5 @@
 FROM php:8.4-apache
 
-RUN if [ "$(grep '^VERSION_ID=' /etc/os-release | cut -d '=' -f 2 | tr -d '"')" -eq "9" ]; then \
-        sed -i -e 's/deb.debian.org/archive.debian.org/g' \
-               -e 's/security.debian.org/archive.debian.org/g' \
-               -e '/stretch-updates/d' /etc/apt/sources.list; \
-    fi
-
 # Download script to install PHP extensions and dependencies
 ADD https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
 
@@ -39,10 +33,6 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update -q \
       pdo_mysql \
       zip \
     " \
-    && case "$PHP_VERSION" in \
-      5.6.*) PHP_EXTENSIONS="$PHP_EXTENSIONS mcrypt mysql";; \
-      7.0.*|7.1.*) PHP_EXTENSIONS="$PHP_EXTENSIONS mcrypt";; \
-    esac \
     && install-php-extensions $PHP_EXTENSIONS \
     && a2enmod rewrite headers \
     && sed -ri -e 's!AllowOverride None!AllowOverride All!g' /etc/apache2/apache2.conf \
@@ -84,8 +74,9 @@ RUN printf '{"channel":"%s","version":"%s","commit":"%s"}\n' "$APP_CHANNEL" "$AP
 
 RUN rm -rf /var/www/html/.git 2>/dev/null || true
 
-RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 755 /var/www/html
+RUN chown -R root:root /var/www/html \
+    && chmod -R 755 /var/www/html \
+    && chown -R www-data:www-data /var/www/html/saved_qrcode
 
 EXPOSE 80
 CMD ["apache2-foreground"]

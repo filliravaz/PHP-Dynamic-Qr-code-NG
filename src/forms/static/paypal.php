@@ -51,7 +51,7 @@
         <div class="col-6 col-md-2">
             <div class="form-group">
                 <label>Amount *</label>
-                <input type="number" name="amount" value="" placeholder="" class="form-control">
+                <input type="number" step="any" name="amount" value="" placeholder="" class="form-control">
             </div>
         </div>
         
@@ -81,7 +81,7 @@
         <div class="col-6 col-md-2">
             <div class="form-group">
                 <label>Shipping </label>
-                <input type="number" name="shipping" value="" placeholder="" class="form-control">
+                <input type="number" step="any" name="shipping" value="" placeholder="" class="form-control">
             </div>
         </div>
         

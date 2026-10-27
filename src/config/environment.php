@@ -10,11 +10,11 @@ define('DATABASE_PORT', filter_var(getenv('DATABASE_PORT'), FILTER_VALIDATE_INT)
 define('DATABASE_NAME', getenv('DATABASE_NAME') ?: 'qrcode');
 define('DATABASE_USER', getenv('DATABASE_USER') ?: 'root');
 define('DATABASE_PASSWORD', getenv('DATABASE_PASSWORD') ?: 'root');
-define('DATABASE_PREFIX', getenv('DATABASE_PREFIX') !== false ? getenv('DATABASE_PREFIX') : 'qr_');
-define('DATABASE_CHARSET', getenv('DATABASE_CHARSET') ?: 'utf8');
+define('DATABASE_PREFIX', getenv('DATABASE_PREFIX') !== false ? getenv('DATABASE_PREFIX') : '');
+define('DATABASE_CHARSET', getenv('DATABASE_CHARSET') ?: 'utf8mb4');
 
 define('TYPE', getenv('TYPE') ?: 'local');
 define('BASE_URL', getenv('BASE_URL') ?: 'http://localhost');
 define('FORCE_HTTPS', filter_var(getenv('FORCE_HTTPS'), FILTER_VALIDATE_BOOLEAN));
 define('TRUSTED_PROXIES', getenv('TRUSTED_PROXIES') !== false ? getenv('TRUSTED_PROXIES') : '');
-define('QRCODE_GENERATOR', getenv('QRCODE_GENERATOR') ?: 'internal-endroid.qrcode'); // options: internal-endroid.qrcode (default, with Endroid), internal-chillerlan.qrcode (alias), or external-api.qrserver.com
+define('QRCODE_GENERATOR', getenv('QRCODE_GENERATOR') ?: 'internal-endroid.qrcode'); // options: internal-endroid.qrcode (default, with Endroid) or external-api.qrserver.com

@@ -7,16 +7,36 @@ require_once BASE_PATH . '/lib/DynamicQrcode/DynamicQrcode.php';
 $db = getDbInstance();
 $dynamic_qrcode = new DynamicQrcode();
 
-$select = array('id', 'id_owner', 'filename', 'identifier', 'link', 'qrcode', 'scan', 'state', 'created_at', 'updated_at');
+$prefix = defined('DATABASE_PREFIX') ? DATABASE_PREFIX : '';
+$order_table = $prefix . 'dynamic_qrcodes';
+$allowed_columns = array('id', 'id_owner', 'filename', 'identifier', 'link', 'qrcode', 'scan', 'state', 'created_at', 'updated_at');
+$select = array(
+    $order_table . '.id',
+    $order_table . '.id_owner',
+    $order_table . '.filename',
+    $order_table . '.identifier',
+    $order_table . '.link',
+    $order_table . '.qrcode',
+    $order_table . '.scan',
+    $order_table . '.state',
+    $order_table . '.created_at',
+    $order_table . '.updated_at',
+    'u.username AS owner_username'
+);
 $search_fields = array('filename', 'identifier', 'link');
 require_once BASE_PATH . '/includes/search_order.php';
-$page = filter_input(INPUT_GET, 'page', FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?? 1;
+$page = filter_input(INPUT_GET, 'page', FILTER_VALIDATE_INT);
+if (!$page || $page < 1) {
+    $page = 1;
+}
 $db->pageLimit = 15;
 
 if($_SESSION['type'] !== 'super') {
-    $db->where('id_owner', (int)$_SESSION['user_id']);
+    $db->where($order_table . '.id_owner', (int)$_SESSION['user_id']);
 }
 
+// PERF-01: Join users table to resolve owner username in a single query
+$db->join('users u', 'u.id = ' . $order_table . '.id_owner', 'LEFT');
 $rows = $db->arraybuilder()->paginate('dynamic_qrcodes', $page, $select);
 $total_pages = $db->totalPages;
 ?>

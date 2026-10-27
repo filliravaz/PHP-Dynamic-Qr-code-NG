@@ -18,6 +18,7 @@ if (session_status() === PHP_SESSION_NONE) {
     $isSecure = isHttpsRequest();
     ini_set('session.cookie_httponly', '1');
     ini_set('session.use_only_cookies', '1');
+    ini_set('session.use_strict_mode', '1');
     ini_set('session.cookie_samesite', 'Lax');
     if ($isSecure) {
         ini_set('session.cookie_secure', '1');
@@ -34,8 +35,8 @@ if (!headers_sent()) {
     }
 }
 
-define('CURRENT_PAGE', basename($_SERVER['REQUEST_URI']));
-define('SCRIPT_NAME', ltrim(dirname($_SERVER['SCRIPT_NAME']), '/'));
+define('CURRENT_PAGE', basename(parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH) ?? ''));
+define('SCRIPT_NAME', ltrim(dirname($_SERVER['SCRIPT_NAME'] ?? ''), '/'));
 
 if(SCRIPT_NAME === "")
     define('SCRIPT_FOLDER', "");
@@ -51,15 +52,24 @@ define('SAVED_QRCODE_DIRECTORY', BASE_PATH.'/saved_qrcode/');
 define('SAVED_QRCODE_URL', base_url(). SCRIPT_FOLDER .'/saved_qrcode/');
 
 //You can change the page name for the redirect and the search parameter (the default is "id")
-define('READ_PATH', base_url().'/read.php?id=');
+define('READ_PATH', base_url() . SCRIPT_FOLDER . '/read.php?id=');
 
 
 /**
- * Get instance of DB object
+ * Retrieve the singleton instance of the database connection wrapper (MysqliDb).
+ *
+ * Configures connection parameters from environment constants and disables
+ * default mysqli exception reporting so MysqliDb can manage return statuses
+ * and internal error logging gracefully in PHP 8.1+ (ERR-04).
+ *
+ * @return MysqliDb The initialized singleton database wrapper instance.
  */
 function getDbInstance() {
     static $instance = null;
     if ($instance === null) {
+        if (function_exists('mysqli_report')) {
+            mysqli_report(MYSQLI_REPORT_OFF);
+        }
         $instance = new MysqliDb (Array (
             'host' => DATABASE_HOST,
             'username' => DATABASE_USER,

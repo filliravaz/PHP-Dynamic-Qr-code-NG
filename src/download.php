@@ -110,13 +110,14 @@ $mime = $mimes[$ext] ?? 'application/octet-stream';
 
 $isView = isset($_GET['view']);
 $disposition = $isView ? 'inline' : 'attachment';
+$downloadFilename = (!empty($row['filename']) ? basename($row['filename']) : 'qrcode') . '.' . $ext;
 
 header('Content-Type: ' . $mime);
 if ($ext === 'svg') {
     // Prevent script execution if SVG is loaded directly in browser (RES-03)
     header("Content-Security-Policy: default-src 'none'");
 }
-header('Content-Disposition: ' . $disposition . '; filename="' . $safeFilename . '"');
+header('Content-Disposition: ' . $disposition . '; filename="' . $downloadFilename . '"');
 header('Content-Length: ' . filesize($realFilePath));
 header('Cache-Control: no-store, private');
 

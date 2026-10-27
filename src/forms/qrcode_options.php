@@ -260,9 +260,13 @@ $optUid = 'opt_' . bin2hex(random_bytes(4));
                 <select name="id_owner" id="id_owner_<?php echo $optUid; ?>" class="form-control">
                     <option value="" selected>All</option>
                     <?php
-                    require_once BASE_PATH . '/lib/Users/Users.php';
-                    $users_instance = new Users();
-                    $users = $users_instance->getAllUsers();
+                    // PERF-02: Reuse pre-queried user list to prevent 22 duplicate SQL queries across tabs
+                    if (!isset($allUsers)) {
+                        require_once BASE_PATH . '/lib/Users/Users.php';
+                        $users_instance = new Users();
+                        $allUsers = $users_instance->getAllUsers();
+                    }
+                    $users = $allUsers;
                     foreach ($users as $user) {
                     ?>
                     <option value="<?php echo (int)$user["id"];?>"><?php echo htmlspecialchars($user["username"], ENT_QUOTES, 'UTF-8');?></option>

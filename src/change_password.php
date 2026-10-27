@@ -145,7 +145,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 <div class="row">
                     <div class="col-8">
-                        <a href="logout.php" class="btn btn-default btn-block text-muted"><i class="fas fa-sign-out-alt"></i> Logout</a>
+                        <a href="logout.php?csrf_token=<?php echo htmlspecialchars(getCsrfToken(), ENT_QUOTES, 'UTF-8'); ?>" class="btn btn-default btn-block text-muted"><i class="fas fa-sign-out-alt"></i> Logout</a>
                     </div>
                     <div class="col-4">
                         <button type="submit" class="btn btn-primary btn-block">Update</button>

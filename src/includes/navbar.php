@@ -27,7 +27,7 @@
             <i class="fas fa-key"></i> Change Password
           </a>
           <div class="dropdown-divider"></div>
-          <a href="./logout.php" class="dropdown-item">
+          <a href="./logout.php?csrf_token=<?php echo htmlspecialchars(getCsrfToken(), ENT_QUOTES, 'UTF-8'); ?>" class="dropdown-item">
             <i class="fas fa-sign-out-alt"></i> Logout
           </a>
         </div>

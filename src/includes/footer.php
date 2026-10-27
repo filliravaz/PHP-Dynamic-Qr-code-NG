@@ -38,7 +38,7 @@ $appVersionInfo = function_exists('getAppVersionInfo') ? getAppVersionInfo() : [
 <!-- AdminLTE App -->
 <script src="dist/js/adminlte.min.js"></script>
 <!-- AdminLTE Custom-->
-<script src="dist/js/custom.js?nocache=<?php print rand();?>"></script>
+<script src="dist/js/custom.js?v=<?php echo urlencode($appVersionInfo['tag']); ?>"></script>
 <!-- Color picker -->
 <script src="plugins/bootstrap-colorpicker/js/bootstrap-colorpicker.min.js"></script>
 <!-- Moment -->

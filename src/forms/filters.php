@@ -34,12 +34,12 @@ endforeach;
 							<div class="col-5 col-md-1">
 								<select name="order_dir" class="form-control" id="input_order">
                 <option value="Asc" <?php
-if ($order_dir == 'Asc') {
+if (strtoupper((string)$order_dir) === 'ASC') {
 	echo 'selected';
 }
 ?> >Asc</option>
                 <option value="Desc" <?php
-if ($order_dir == 'Desc') {
+if (strtoupper((string)$order_dir) === 'DESC') {
 	echo 'selected';
 }
 ?>>Desc</option>

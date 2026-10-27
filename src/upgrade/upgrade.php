@@ -4,6 +4,13 @@ require_once dirname(__DIR__) . '/config/environment.php';
 $isCli = (php_sapi_name() === 'cli');
 define('TARGET_VERSION', '2.0.0');
 
+/**
+ * Outputs a message formatted appropriately for CLI or web browser contexts.
+ *
+ * @param string $message The message text (may contain HTML for browser context).
+ * @param bool $isCli True if running in CLI environment, false for web server.
+ * @return void
+ */
 function outputMessage($message, $isCli) {
     if ($isCli) {
         echo strip_tags($message) . "\n";
@@ -12,6 +19,14 @@ function outputMessage($message, $isCli) {
     }
 }
 
+/**
+ * Halts migration execution, outputs an error message, and closes database connection.
+ *
+ * @param mysqli|null $conn Database connection to close if active.
+ * @param string $message Error message description.
+ * @param bool $isCli True if running in CLI environment, false for web server.
+ * @return never
+ */
 function abortMigration($conn, $message, $isCli) {
     outputMessage("Error: " . $message, $isCli);
     if ($conn instanceof mysqli) {
@@ -20,17 +35,10 @@ function abortMigration($conn, $message, $isCli) {
     exit(1);
 }
 
-// Browser access requires authenticated super administrator before establishing DB connection or querying state
+// Browser access requires authenticated super administrator before establishing DB connection or querying state (SEC-09)
 if (!$isCli) {
-    require_once dirname(__DIR__) . '/helpers/helpers.php';
+    require_once dirname(__DIR__) . '/config/config.php';
     if (session_status() === PHP_SESSION_NONE) {
-        $isSecure = isHttpsRequest();
-        ini_set('session.cookie_httponly', '1');
-        ini_set('session.use_only_cookies', '1');
-        ini_set('session.cookie_samesite', 'Lax');
-        if ($isSecure) {
-            ini_set('session.cookie_secure', '1');
-        }
         session_start();
     }
 
@@ -40,11 +48,13 @@ if (!$isCli) {
      * (with `user_name` / `admin_type` columns) cannot authenticate via the 2.0 web login flow and must
      * execute the upgrade via the CLI (`php src/upgrade/upgrade.php` on host, or `docker compose run --rm php-dynamic-qrcode php upgrade/upgrade.php` in Docker).
      */
-    if (empty($_SESSION['user_logged_in']) || empty($_SESSION['type']) || $_SESSION['type'] !== 'super') {
+    if (empty($_SESSION['user_logged_in']) || $_SESSION['user_logged_in'] !== true || empty($_SESSION['user_id']) || empty($_SESSION['type']) || $_SESSION['type'] !== 'super') {
         http_response_code(403);
         outputMessage("Forbidden: Database upgrades via browser require an authenticated super administrator session. <a href='../login.php'>Log In</a><br><br><em>Note: If upgrading a legacy installation still using <code>admin_accounts</code>, please run the upgrade via CLI (<code>php src/upgrade/upgrade.php</code> or in Docker: <code>docker compose run --rm php-dynamic-qrcode php upgrade/upgrade.php</code>).</em>", false);
         exit(1);
     }
+
+    require_once dirname(__DIR__) . '/includes/auth_validate.php';
 }
 
 $conn = new mysqli(DATABASE_HOST, DATABASE_USER, DATABASE_PASSWORD, DATABASE_NAME, DATABASE_PORT);
@@ -340,12 +350,30 @@ $laSql = "CREATE TABLE IF NOT EXISTS `{$loginAttemptsTable}` (
     `attempted_at` DATETIME NOT NULL,
     PRIMARY KEY (`id`),
     KEY `idx_ip_time` (`ip_address`, `attempted_at`),
-    KEY `idx_user_time` (`username`, `attempted_at`)
+    KEY `idx_user_time` (`username`, `attempted_at`),
+    KEY `idx_user_ip_time` (`username`, `ip_address`, `attempted_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 if ($conn->query($laSql) === TRUE) {
     outputMessage("The login_attempts table was verified/created successfully.", $isCli);
 } else {
     abortMigration($conn, "Error creating login_attempts table: " . $conn->error, $isCli);
+}
+
+// Ensure dynamic_qrcodes identifier column is indexed VARCHAR(32) (SEC-07)
+$dynTable = DATABASE_PREFIX . 'dynamic_qrcodes';
+$dynTableCheck = $conn->query("SHOW TABLES LIKE '{$dynTable}'");
+if ($dynTableCheck && $dynTableCheck->num_rows > 0) {
+    $idColCheck = $conn->query("SHOW COLUMNS FROM `{$dynTable}` LIKE 'identifier'");
+    if ($idColCheck && $idColCheck->num_rows > 0) {
+        $colRow = $idColCheck->fetch_assoc();
+        if (stripos($colRow['Type'] ?? '', 'varchar(32)') === false) {
+            $conn->query("ALTER TABLE `{$dynTable}` MODIFY `identifier` VARCHAR(32) NOT NULL");
+        }
+    }
+    $idxCheck = $conn->query("SHOW INDEX FROM `{$dynTable}` WHERE Key_name = 'idx_identifier'");
+    if ($idxCheck && $idxCheck->num_rows === 0) {
+        $conn->query("ALTER TABLE `{$dynTable}` ADD UNIQUE KEY `idx_identifier` (`identifier`)");
+    }
 }
 
 // Backfill id_owner for dynamic_qrcodes and static_qrcodes

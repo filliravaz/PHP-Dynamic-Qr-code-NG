@@ -5,7 +5,7 @@ $order_by	= filter_input(INPUT_GET, 'order_by', FILTER_DEFAULT);
 $order_dir	= filter_input(INPUT_GET, 'order_dir', FILTER_DEFAULT);
 $search_str	= filter_input(INPUT_GET, 'search_str', FILTER_DEFAULT);
 
-$allowed_columns = (isset($select) && is_array($select)) ? $select : ['id'];
+$allowed_columns = (isset($allowed_columns) && is_array($allowed_columns)) ? $allowed_columns : ((isset($select) && is_array($select)) ? $select : ['id']);
 
 // Whitelist order_by column against table schema columns
 if (!$order_by || !in_array($order_by, $allowed_columns, true)) {
@@ -21,7 +21,8 @@ if (!empty($search_str) && isset($search_fields) && is_array($search_fields)) {
     $searchParams = [];
     foreach ($search_fields as $value) {
         if (in_array($value, $allowed_columns, true)) {
-            $searchClauses[] = "`{$value}` LIKE ?";
+            $colPrefix = (!empty($order_table)) ? "`{$order_table}`." : '';
+            $searchClauses[] = "{$colPrefix}`{$value}` LIKE ?";
             $searchParams[] = '%' . $search_str . '%';
         }
     }
@@ -30,6 +31,7 @@ if (!empty($search_str) && isset($search_fields) && is_array($search_fields)) {
     }
 }
 
-// Apply whitelisted ordering to query
-$db->orderBy($order_by, $order_dir);
+// Apply whitelisted ordering to query (with table prefix if joining, to avoid ambiguity)
+$orderCol = (!empty($order_table)) ? "`{$order_table}`.`{$order_by}`" : $order_by;
+$db->orderBy($orderCol, $order_dir);
 ?>

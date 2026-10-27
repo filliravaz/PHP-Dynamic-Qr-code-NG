@@ -120,7 +120,7 @@ if($_SERVER["REQUEST_METHOD"] === "POST") {
 
 <!-- Footer and scripts -->
 <?php include './includes/footer.php'; ?>
-<script src="dist/js/qr-preview.js?v=<?php echo time(); ?>"></script>
+<script src="dist/js/qr-preview.js?v=<?php echo urlencode($appVersionInfo['tag'] ?? '2.3.0'); ?>"></script>
 
 <!-- Page script -->
 <script type="text/javascript">

@@ -78,6 +78,12 @@ function validateCsrfToken($token = null, $rotate = true) {
 
 /**
  * Determine whether a given IP address matches configured TRUSTED_PROXIES.
+ *
+ * Checks explicit IP matches, wildcard '*', and CIDR subnets. Handles edge bitshifts
+ * correctly on 64-bit PHP architectures (SEC-03).
+ *
+ * @param string|null $ip The IP address to test.
+ * @return bool True if the IP matches a configured trusted proxy, false otherwise.
  */
 function isTrustedProxy($ip) {
 	if (empty($ip) || !is_string($ip)) {
@@ -95,11 +101,17 @@ function isTrustedProxy($ip) {
 		if (strpos($proxy, '/') !== false) {
 			[$subnet, $bits] = explode('/', $proxy, 2);
 			if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) && filter_var($subnet, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
-				$ipLong = ip2long($ip);
-				$subnetLong = ip2long($subnet);
-				$mask = -1 << (32 - (int)$bits);
-				if (($ipLong & $mask) === ($subnetLong & $mask)) {
+				$bitNum = (int)$bits;
+				if ($bitNum === 0) {
 					return true;
+				}
+				if ($bitNum > 0 && $bitNum <= 32) {
+					$ipLong = ip2long($ip);
+					$subnetLong = ip2long($subnet);
+					$mask = (-1 << (32 - $bitNum)) & 0xFFFFFFFF;
+					if (($ipLong & $mask) === ($subnetLong & $mask)) {
+						return true;
+					}
 				}
 			}
 		}
@@ -108,9 +120,14 @@ function isTrustedProxy($ip) {
 }
 
 /**
- * Retrieve the client IP address.
- * Trusts X-Forwarded-For only when the direct remote address is trusted,
- * selecting the first valid non-trusted address while otherwise returning the remote address.
+ * Retrieve the verified client IP address.
+ *
+ * Trusts X-Forwarded-For only when the direct remote address is a configured trusted proxy.
+ * Traverses forwarded IP entries from right to left (most recent proxy backwards),
+ * discarding trusted proxies until reaching the first untrusted upstream IP to prevent
+ * header spoofing (SEC-02).
+ *
+ * @return string The resolved client IP address.
  */
 function getClientIp() {
 	$remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
@@ -120,7 +137,8 @@ function getClientIp() {
 
 	if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
 		$forwarded = array_map('trim', explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']));
-		foreach ($forwarded as $ip) {
+		$reversed = array_reverse($forwarded);
+		foreach ($reversed as $ip) {
 			if (filter_var($ip, FILTER_VALIDATE_IP)) {
 				if (!isTrustedProxy($ip)) {
 					return $ip;
@@ -191,7 +209,10 @@ function clearAuthCookie() {
 }
 
 /**
+ * Sanitize and clean raw input string data.
  *
+ * @param string $data The raw input string.
+ * @return string The sanitized string safe for output.
  */
 function clean_input($data) {
 	$data = trim($data);
@@ -200,6 +221,17 @@ function clean_input($data) {
 	return $data;
 }
 
+/**
+ * Generate Bootstrap pagination HTML markup for table views.
+ *
+ * Preserves allowed search and sorting query parameters across page changes
+ * and applies proper active class styling (BUG-04).
+ *
+ * @param int $current_page The current active page number.
+ * @param int $total_pages The total number of pages available.
+ * @param string $base_url Target URL for pagination links.
+ * @return string|false HTML markup string, or false if total pages <= 1.
+ */
 function paginationLinks($current_page, $total_pages, $base_url) {
 
 	if ($total_pages <= 1) {
@@ -229,10 +261,6 @@ function paginationLinks($current_page, $total_pages, $base_url) {
 		$html .= '<li class="page-item"><a class="page-link" href="' . $buildUrl(1) . '">First</a></li>';
 	}
 
-	// Show pagination links
-
-	//var i = (Number(data.page) > 5 ? Number(data.page) - 4 : 1);
-
 	if ($current_page > 5) {
 		$i = $current_page - 4;
 	} else {
@@ -240,30 +268,31 @@ function paginationLinks($current_page, $total_pages, $base_url) {
 	}
 
 	for (; $i <= ($current_page + 4) && ($i <= $total_pages); $i++) {
-		($current_page == $i) ? $li_class = ' class="active"' : $li_class = '';
+		$li_class = ((int)$current_page === (int)$i) ? ' active' : '';
 
-		$html = $html . '<li class="page-item"' . $li_class . '><a class="page-link" href="' . $buildUrl($i) . '">' . $i . '</a></li>';
+		$html .= '<li class="page-item' . $li_class . '"><a class="page-link" href="' . $buildUrl($i) . '">' . $i . '</a></li>';
 
 		if ($i == $current_page + 4 && $i < $total_pages) {
-
-			$html = $html . '<li class="page-item disabled"><a class="page-link">...</a></li>';
-
+			$html .= '<li class="page-item disabled"><a class="page-link">...</a></li>';
 		}
-
 	}
 
 	if ($current_page == $total_pages) {
 		$html .= '<li class="page-item disabled"><a class="page-link">Last</a></li>';
 	} else {
-
 		$html .= '<li class="page-item"><a class="page-link" href="' . $buildUrl($total_pages) . '">Last</a></li>';
 	}
 
-	$html = $html . '</ul>';
+	$html .= '</ul>';
 
 	return $html;
 }
 
+/**
+ * Retrieve the application base URL from configuration or environment.
+ *
+ * @return string The base URL string.
+ */
 function base_url() {
     require_once(__DIR__ . '/../config/environment.php');
     if (defined('BASE_URL') && BASE_URL !== null) {
@@ -279,13 +308,16 @@ function base_url() {
 }
 
 /**
- * Check rate limit for authentication actions.
- * Limits by client IP (max 5 per 15 min) and by username (max 5 per 15 min).
+ * Check rate limit for authentication actions (SEC-01).
  *
- * @param string|null $username
- * @param string $ip
- * @param int $maxAttempts
- * @param int $decayMinutes
+ * Limits by composite (username, client IP) to prevent unauthenticated global
+ * account lockouts, while also enforcing an overall per-IP threshold to deter
+ * distributed dictionary attacks.
+ *
+ * @param string|null $username The username attempting login.
+ * @param string $ip The requesting client IP address.
+ * @param int $maxAttempts Maximum allowed failed attempts before locking out the composite pair.
+ * @param int $decayMinutes Window duration in minutes for counting failed attempts.
  * @return bool True if allowed, false if rate limit exceeded.
  */
 function checkLoginRateLimit($username, $ip, $maxAttempts = 5, $decayMinutes = 15) {
@@ -302,7 +334,8 @@ function checkLoginRateLimit($username, $ip, $maxAttempts = 5, $decayMinutes = 1
                 `attempted_at` datetime NOT NULL,
                 PRIMARY KEY (`id`),
                 KEY `idx_ip_time` (`ip_address`, `attempted_at`),
-                KEY `idx_user_time` (`username`, `attempted_at`)
+                KEY `idx_user_time` (`username`, `attempted_at`),
+                KEY `idx_user_ip_time` (`username`, `ip_address`, `attempted_at`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
         };
 
@@ -345,13 +378,15 @@ function checkLoginRateLimit($username, $ip, $maxAttempts = 5, $decayMinutes = 1
                 $ipAttempts = $db->getValue('login_attempts', 'count(*)');
             }
 
-            if ($ipAttempts !== null && (int)$ipAttempts >= $maxAttempts) {
+            $maxIpThreshold = max(15, $maxAttempts * 3);
+            if ($ipAttempts !== null && (int)$ipAttempts >= $maxIpThreshold) {
                 return false;
             }
 
-            // Count attempts by username
+            // Count attempts by composite (username, IP) to prevent cross-IP account lockout (SEC-01)
             if (!empty($username)) {
                 $db->where('username', $username);
+                $db->where('ip_address', $ip);
                 $db->where('attempted_at >= ?', [$cutoff]);
                 $userAttempts = $db->getValue('login_attempts', 'count(*)');
                 if ($userAttempts !== null && (int)$userAttempts >= $maxAttempts) {
@@ -374,9 +409,9 @@ function checkLoginRateLimit($username, $ip, $maxAttempts = 5, $decayMinutes = 1
 /**
  * Record an authentication attempt. Returns true on successful insert, false on failure.
  *
- * @param string $username
- * @param string $ip
- * @return bool
+ * @param string $username The username attempted.
+ * @param string $ip The client IP address.
+ * @return bool True if successfully recorded, false on failure.
  */
 function recordLoginAttempt($username, $ip) {
     if (!function_exists('getDbInstance')) {
@@ -419,7 +454,14 @@ function recordLoginAttempt($username, $ip) {
 }
 
 /**
- * Clear recorded attempts on successful authentication.
+ * Clear recorded attempts on successful authentication (SEC-01).
+ *
+ * Only deletes attempts matching both username AND client IP to prevent an
+ * attacker from clearing rate-limit records for other IP addresses.
+ *
+ * @param string|null $username The authenticated username.
+ * @param string|null $ip The requesting client IP address.
+ * @return void
  */
 function clearLoginAttempts($username, $ip = null) {
     $normUser = (is_string($username) && trim($username) !== '') ? trim($username) : null;
@@ -432,15 +474,17 @@ function clearLoginAttempts($username, $ip = null) {
     if (function_exists('getDbInstance')) {
         try {
             $db = getDbInstance();
-            if ($normUser !== null) {
+            if ($normUser !== null && $normIp !== null) {
                 $db->where('username', $normUser);
-                if ($normIp !== null) {
-                    $db->orWhere('ip_address', $normIp);
-                }
+                $db->where('ip_address', $normIp);
+                $db->delete('login_attempts');
+            } elseif ($normUser !== null) {
+                $db->where('username', $normUser);
+                $db->delete('login_attempts');
             } elseif ($normIp !== null) {
                 $db->where('ip_address', $normIp);
+                $db->delete('login_attempts');
             }
-            $db->delete('login_attempts');
         } catch (\Throwable $e) {
             error_log('clearLoginAttempts storage failure: ' . $e->getMessage());
         }
