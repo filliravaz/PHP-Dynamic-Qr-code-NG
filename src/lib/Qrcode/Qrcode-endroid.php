@@ -892,8 +892,22 @@ class Qrcode {
         $old_qrcode = $this->getQrcode($input_data["id"]);
 
         $data_to_db['filename'] = $this->sanitizeFilename($data_to_db['filename']);
-        // SEC-06: Preserve existing disk storage filename
-        $data_to_db['qrcode'] = !empty($old_qrcode['qrcode']) ? $old_qrcode['qrcode'] : ($data_to_db['filename'] . '.' . ($old_qrcode['format'] ?? 'png'));
+        // SEC-06 & CWE-639: Do not accept a user-supplied basename as the record's file reference.
+        // Preserve existing reference or resolve and validate the record's actual image on disk.
+        if (!empty($old_qrcode['qrcode'])) {
+            $data_to_db['qrcode'] = $old_qrcode['qrcode'];
+        } else {
+            $origFormat = preg_replace('/[^a-zA-Z0-9]/', '', strtolower($old_qrcode['format'] ?? 'png'));
+            $origFilename = $this->sanitizeFilename($old_qrcode['filename'] ?? '');
+            $legacyDiskName = (!empty($origFilename) && !empty($origFormat)) ? ($origFilename . '.' . $origFormat) : null;
+            $legacyPath = ($legacyDiskName !== null) ? (SAVED_QRCODE_DIRECTORY . $legacyDiskName) : null;
+
+            if ($legacyPath !== null && file_exists($legacyPath) && is_file($legacyPath)) {
+                $data_to_db['qrcode'] = $legacyDiskName;
+            } else {
+                $data_to_db['qrcode'] = $old_qrcode['qrcode'] ?? null;
+            }
+        }
 
         $db->where('id', (int)$input_data["id"]);
         $stat = $db->update($this->table, $data_to_db);
