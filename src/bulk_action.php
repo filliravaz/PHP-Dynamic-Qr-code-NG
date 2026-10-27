@@ -71,7 +71,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $safeName = basename($row['qrcode']);
                 $filePath = SAVED_QRCODE_DIRECTORY . $safeName;
                 if (file_exists($filePath)) {
-                    $files[] = $filePath;
+                    $ext = strtolower(pathinfo($safeName, PATHINFO_EXTENSION));
+                    $displayName = (!empty($row['filename']) ? basename($row['filename']) : 'qrcode') . '_' . $row['id'] . '.' . $ext;
+                    $files[] = [
+                        'path' => $filePath,
+                        'name' => $displayName
+                    ];
                 }
             }
         }
@@ -111,9 +116,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $url_path = 'download.php?zip=' . $uniqid;
 
         if ($zip->open($relative_dir, ZipArchive::CREATE) === TRUE) {
-            foreach ($files as $file) {
-                $download_file = file_get_contents($file);
-                $zip->addFromString(basename($file), $download_file);
+            foreach ($files as $fileInfo) {
+                $download_file = file_get_contents($fileInfo['path']);
+                $zip->addFromString($fileInfo['name'], $download_file);
             }
             $zip->close();
 

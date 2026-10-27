@@ -644,12 +644,10 @@ class Qrcode {
         $fileExt = ($format === 'jpeg') ? 'jpg' : $format;
         $data_to_db['format'] = $fileExt;
         $data_to_db['filename'] = $this->sanitizeFilename($data_to_db['filename']);
-        $data_to_db['qrcode'] = $data_to_db['filename'] . '.' . $fileExt;
-        $filename = $this->getSafeFilePath($data_to_db['filename'], $fileExt);
-
-        if (file_exists($filename)) {
-            $this->failure('You cannot create a new qr code with an existing name on the server!');
-        }
+        // SEC-06: Use unique internal identifier for disk storage to prevent collisions and namespace squatting
+        $diskIdentifier = bin2hex(random_bytes(16));
+        $data_to_db['qrcode'] = $diskIdentifier . '.' . $fileExt;
+        $filename = SAVED_QRCODE_DIRECTORY . $data_to_db['qrcode'];
 
         $logoPath = $this->resolveLogoPath();
 
@@ -882,44 +880,37 @@ class Qrcode {
      * @param array $data_to_db Columns to update in the database.
      * @return void
      */
+    /**
+     * Updates an existing QR code metadata record without mutating internal storage identifiers (SEC-06).
+     *
+     * @param array $input_data Raw form input containing ID and update fields.
+     * @param array $data_to_db Columns to update in the database.
+     * @return void
+     */
     public function editQrcode(array $input_data, array $data_to_db): void {
         $db = getDbInstance();
         $old_qrcode = $this->getQrcode($input_data["id"]);
 
         $data_to_db['filename'] = $this->sanitizeFilename($data_to_db['filename']);
-        $oldFormat = preg_replace('/[^a-zA-Z0-9]/', '', strtolower($old_qrcode["format"] ?? 'png'));
-        $data_to_db['qrcode'] = $data_to_db['filename'] . '.' . $oldFormat;
-
-        $oldFile = $this->getSafeFilePath($old_qrcode["filename"], $oldFormat);
-        $newFile = $this->getSafeFilePath($data_to_db['filename'], $oldFormat);
-
-        $renamed = false;
-        if (!file_exists($newFile) || $newFile === $oldFile) {
-            if (file_exists($oldFile) && $oldFile !== $newFile) {
-                try {
-                    if (!rename($oldFile, $newFile)) {
-                        $this->failure('Failed to rename QR code file.');
-                    }
-                    $renamed = true;
-                } catch (Exception $e) {
-                    $this->failure($e->getMessage());
-                }
-            }
-
-            $db->where('id', (int)$input_data["id"]);
-            $stat = $db->update($this->table, $data_to_db);
-
-            if (!$stat && $renamed) {
-                if (!@rename($newFile, $oldFile)) {
-                    error_log('Update failed: ' . $db->getLastError() . ' (Rollback failed: unable to restore file)');
-                    $this->failure('Update failed. File restoration failed.');
-                }
-            }
-
-
+        // SEC-06 & CWE-639: Do not accept a user-supplied basename as the record's file reference.
+        // Preserve existing reference or resolve and validate the record's actual image on disk.
+        if (!empty($old_qrcode['qrcode'])) {
+            $data_to_db['qrcode'] = $old_qrcode['qrcode'];
         } else {
-            $this->failure('You cannot edit a qr code with an existing name on the server!');
+            $origFormat = preg_replace('/[^a-zA-Z0-9]/', '', strtolower($old_qrcode['format'] ?? 'png'));
+            $origFilename = $this->sanitizeFilename($old_qrcode['filename'] ?? '');
+            $legacyDiskName = (!empty($origFilename) && !empty($origFormat)) ? ($origFilename . '.' . $origFormat) : null;
+            $legacyPath = ($legacyDiskName !== null) ? (SAVED_QRCODE_DIRECTORY . $legacyDiskName) : null;
+
+            if ($legacyPath !== null && file_exists($legacyPath) && is_file($legacyPath)) {
+                $data_to_db['qrcode'] = $legacyDiskName;
+            } else {
+                $data_to_db['qrcode'] = $old_qrcode['qrcode'] ?? null;
+            }
         }
+
+        $db->where('id', (int)$input_data["id"]);
+        $stat = $db->update($this->table, $data_to_db);
 
         if ($stat) {
             $this->success('Qr code updated successfully!');
@@ -937,10 +928,26 @@ class Qrcode {
      * @return void
      */
     public function deleteQrcode(int $id, bool $async = false): void {
-        $db = getDbInstance();
-        $qrcode = $this->getQrcode($id);
+        if ($id <= 0) {
+            if (!$async) {
+                $this->failure('QR code not found.');
+            }
+            return;
+        }
 
-        $filePath = $this->getSafeFilePath($qrcode["filename"] ?? '', $qrcode["format"] ?? 'png');
+        $db = getDbInstance();
+        $db->where('id', $id);
+        $qrcode = $db->getOne($this->table);
+        if (!$qrcode) {
+            if (!$async) {
+                $this->failure('QR code not found.');
+            }
+            return;
+        }
+
+        // SEC-06: Resolve disk file from stored unique qrcode filename or fallback to sanitized filename
+        $diskName = !empty($qrcode['qrcode']) ? basename($qrcode['qrcode']) : ($this->sanitizeFilename($qrcode['filename'] ?? '') . '.' . preg_replace('/[^a-zA-Z0-9]/', '', strtolower($qrcode['format'] ?? 'png')));
+        $filePath = SAVED_QRCODE_DIRECTORY . $diskName;
         $stagedPath = null;
         if (file_exists($filePath)) {
             $stagedPath = $filePath . '.deleting.' . bin2hex(random_bytes(6));

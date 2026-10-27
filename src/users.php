@@ -13,7 +13,10 @@ if ($_SESSION['type'] !== 'super')
 $select = array('id', 'username', 'type');
 $search_fields = array('username');
 require_once BASE_PATH . '/includes/search_order.php';
-$page = filter_input(INPUT_GET, 'page', FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?? 1;
+$page = filter_input(INPUT_GET, 'page', FILTER_VALIDATE_INT);
+if (!$page || $page < 1) {
+    $page = 1;
+}
 $db->pageLimit = 15;
 $rows = $db->arraybuilder()->paginate('users', $page, $select);
 $total_pages = $db->totalPages;

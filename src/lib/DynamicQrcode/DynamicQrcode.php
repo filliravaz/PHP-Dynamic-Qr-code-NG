@@ -55,10 +55,10 @@ class DynamicQrcode {
     }
     
     /**
-     * Add qr code
-     * Check out http://goqr.me/api/ for more information
-     * We save the file obtained with the chosen name and in the selected folder
-     * We save into db the url of qrcode image
+     * Add new dynamic QR code record and generate image.
+     *
+     * @param array $input_data Form input parameters including filename, link, and format.
+     * @return void
      */
     public function addQrcode($input_data) {
         if ($_SESSION['type'] === 'super') {
@@ -86,8 +86,10 @@ class DynamicQrcode {
     }
     
     /**
-     * Edit qr code
-     * 
+     * Edit dynamic QR code metadata and update database record (BUG-01).
+     *
+     * @param array $input_data Form input parameters including id, filename, link, and state.
+     * @return void
      */
     public function editQrcode($input_data) {
         $existing = $this->getQrcode($input_data["id"]);
@@ -106,7 +108,7 @@ class DynamicQrcode {
         }
 
         $data_to_db['filename'] = $this->qrcode_instance->sanitizeFilename($input_data['filename']);
-        $data_to_db['created_at'] = date('Y-m-d H:i:s');
+        $data_to_db['updated_at'] = date('Y-m-d H:i:s');
         $data_to_db['link'] = $rawLink;
         $data_to_db['state'] = in_array($input_data['state'], ['enable', 'disable'], true) ? $input_data['state'] : 'enable';
 
@@ -115,8 +117,11 @@ class DynamicQrcode {
 
     
     /**
-     * Delete qr code
-     * 
+     * Delete dynamic QR code record and underlying image file.
+     *
+     * @param int|string $id QR code identifier.
+     * @param bool $async Whether to suppress user redirect on asynchronous deletion.
+     * @return void
      */
     public function deleteQrcode($id, $async = false) {
         if($_SESSION['type'] === "super") {

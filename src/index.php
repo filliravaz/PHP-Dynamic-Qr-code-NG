@@ -28,11 +28,11 @@ $numScan = $db->getOne("dynamic_qrcodes", "sum(scan) as numScan");
                                                 /* CREATED CHART */
 //I initialize the variables that will contain the daily values to 0 otherwise in the foreach loop they will be reset every time
 
-//Get the number of DYNAMIC qr code created in 7 days and total scan
+//Get the number of DYNAMIC qr code created in 7 days and total scan (BUG-02)
 if($_SESSION['type'] !== 'super')
-    $createdQrcode_dynamic = $db->query("select `created_at`, `scan` from " . DATABASE_PREFIX . "dynamic_qrcodes where `created_at` > curdate()-7 AND `id_owner`= " . (int)$_SESSION['user_id'] . ";");
+    $createdQrcode_dynamic = $db->query("select `created_at`, `scan` from " . DATABASE_PREFIX . "dynamic_qrcodes where `created_at` >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) AND `id_owner`= " . (int)$_SESSION['user_id'] . ";");
 else
-    $createdQrcode_dynamic = $db->query("select `created_at`, `scan` from ".DATABASE_PREFIX."dynamic_qrcodes where `created_at` > curdate()-7;");
+    $createdQrcode_dynamic = $db->query("select `created_at`, `scan` from ".DATABASE_PREFIX."dynamic_qrcodes where `created_at` >= DATE_SUB(CURDATE(), INTERVAL 7 DAY);");
 
 
 $dynamic_today = $dynamic_oneday = $dynamic_twoday = $dynamic_threeday = $dynamic_fourday = $dynamic_fiveday = $dynamic_sixday  = 0;
@@ -51,11 +51,11 @@ foreach ($createdQrcode_dynamic as $row) {
 }
 
                                                 /* SCAN CHART */
-//Get the number of STATIC qr code created in 7 days
+//Get the number of STATIC qr code created in 7 days (BUG-02)
 if($_SESSION['type'] !==  'super')
-    $createdQrcode_static = $db->query("select `created_at` from " . DATABASE_PREFIX . "static_qrcodes where `created_at` > curdate()-7 AND `id_owner`=" . (int)$_SESSION['user_id'] . ";");
+    $createdQrcode_static = $db->query("select `created_at` from " . DATABASE_PREFIX . "static_qrcodes where `created_at` >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) AND `id_owner`=" . (int)$_SESSION['user_id'] . ";");
 else
-    $createdQrcode_static = $db->query("select `created_at` from ".DATABASE_PREFIX."static_qrcodes where `created_at` > curdate()-7;");
+    $createdQrcode_static = $db->query("select `created_at` from ".DATABASE_PREFIX."static_qrcodes where `created_at` >= DATE_SUB(CURDATE(), INTERVAL 7 DAY);");
 
 $static_today = $static_oneday = $static_twoday = $static_threeday = $static_fourday = $static_fiveday = $static_sixday = 0;
 foreach ($createdQrcode_static as $row) {

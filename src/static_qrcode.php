@@ -78,46 +78,46 @@ if($_SERVER["REQUEST_METHOD"] === "POST") {
         }
 
         switch($type){
-            case 'text':         $static_qrcode_instance->textQrcode($_POST['text']);
+            case 'text':         $static_qrcode_instance->textQrcode($_POST['text'] ?? '');
                 break;
 
-            case 'email':        $static_qrcode_instance->emailQrcode($_POST['email'], $_POST['subject'], $_POST['message']);
+            case 'email':        $static_qrcode_instance->emailQrcode($_POST['email'] ?? '', $_POST['subject'] ?? '', $_POST['message'] ?? '');
                 break;
 
-            case 'phone':        $static_qrcode_instance->phoneQrcode($_POST['country_code'], $_POST['phone_number']);
+            case 'phone':        $static_qrcode_instance->phoneQrcode($_POST['country_code'] ?? '', $_POST['phone_number'] ?? '');
                 break;
 
-            case 'sms':          $static_qrcode_instance->smsQrcode($_POST['country_code'], $_POST['phone_number'],$_POST['message']);
+            case 'sms':          $static_qrcode_instance->smsQrcode($_POST['country_code'] ?? '', $_POST['phone_number'] ?? '', $_POST['message'] ?? '');
                 break;
 
-            case 'whatsapp':     $static_qrcode_instance->whatsappQrcode($_POST['country_code'], $_POST['phone_number'],$_POST['message']);
+            case 'whatsapp':     $static_qrcode_instance->whatsappQrcode($_POST['country_code'] ?? '', $_POST['phone_number'] ?? '', $_POST['message'] ?? '');
                 break;
 
-            case 'skype':        $static_qrcode_instance->skypeQrcode($_POST['skype_username']);
+            case 'skype':        $static_qrcode_instance->skypeQrcode($_POST['skype_username'] ?? '');
                 break;
 
-            case 'location':     $static_qrcode_instance->locationQrcode($_POST['latitude'], $_POST['longitude']);
+            case 'location':     $static_qrcode_instance->locationQrcode($_POST['latitude'] ?? '', $_POST['longitude'] ?? '');
                 break;
 
-            case 'vcard':        $static_qrcode_instance->vcardQrcode($_POST['full_name'], $_POST['nickname'], $_POST['email'], $_POST['website'], $_POST['phone'], $_POST['home_phone'], $_POST['work_phone'], $_POST['company'], $_POST['role'], $_POST['categories'], $_POST['note'], $_POST['photo'], $_POST['address'], $_POST['city'], $_POST['post_code'], $_POST['state']);
+            case 'vcard':        $static_qrcode_instance->vcardQrcode($_POST['full_name'] ?? '', $_POST['nickname'] ?? '', $_POST['email'] ?? '', $_POST['website'] ?? '', $_POST['phone'] ?? '', $_POST['home_phone'] ?? '', $_POST['work_phone'] ?? '', $_POST['company'] ?? '', $_POST['role'] ?? '', $_POST['categories'] ?? '', $_POST['note'] ?? '', $_POST['photo'] ?? '', $_POST['address'] ?? '', $_POST['city'] ?? '', $_POST['post_code'] ?? '', $_POST['state'] ?? '');
                 break;
 
-            case 'event':        $static_qrcode_instance->eventQrcode($_POST['title'], $_POST['start'], $_POST['end'], $_POST['timezone'], $_POST['location'], $_POST['description'], $_POST['url']);
+            case 'event':        $static_qrcode_instance->eventQrcode($_POST['title'] ?? '', $_POST['start'] ?? '', $_POST['end'] ?? '', $_POST['timezone'] ?? '', $_POST['location'] ?? '', $_POST['description'] ?? '', $_POST['url'] ?? '');
                 break;
 
-            case 'bookmark':     $static_qrcode_instance->bookmarkQrcode($_POST['url'], $_POST['title']);
+            case 'bookmark':     $static_qrcode_instance->bookmarkQrcode($_POST['url'] ?? '', $_POST['title'] ?? '');
                 break;
 
-            case 'wifi':         $static_qrcode_instance->wifiQrcode($_POST['encryption'], $_POST['ssid'], $_POST['password']);
+            case 'wifi':         $static_qrcode_instance->wifiQrcode($_POST['encryption'] ?? '', $_POST['ssid'] ?? '', $_POST['password'] ?? '');
                 break;
 
-            case 'paypal':       $static_qrcode_instance->paypalQrcode($_POST['payment_type'], $_POST['email'], $_POST['item_name'], $_POST['item_id'], $_POST['amount'], $_POST['currency'], $_POST['shipping'], $_POST['tax_rate']);
+            case 'paypal':       $static_qrcode_instance->paypalQrcode($_POST['payment_type'] ?? '', $_POST['email'] ?? '', $_POST['item_name'] ?? '', $_POST['item_id'] ?? '', $_POST['amount'] ?? '', $_POST['currency'] ?? '', $_POST['shipping'] ?? '', $_POST['tax_rate'] ?? '');
                 break;
 
-            case 'bitcoin':      $static_qrcode_instance->bitcoinQrcode($_POST['address'], $_POST['amount'], $_POST['label'], $_POST['message']);
+            case 'bitcoin':      $static_qrcode_instance->bitcoinQrcode($_POST['address'] ?? '', $_POST['amount'] ?? '', $_POST['label'] ?? '', $_POST['message'] ?? '');
                 break;
 
-            case '2fa':      $static_qrcode_instance->twofaQrcode($_POST['algorithms'], $_POST['secret'], rawurlencode($_POST['label']), rawurlencode($_POST['issuer']));
+            case '2fa':          $static_qrcode_instance->twofaQrcode($_POST['algorithms'] ?? '', $_POST['secret'] ?? '', rawurlencode($_POST['label'] ?? ''), rawurlencode($_POST['issuer'] ?? ''));
                 break;
 
             case 'telegram':     $static_qrcode_instance->telegramQrcode($_POST['username'] ?? '', $_POST['message'] ?? '');
@@ -145,6 +145,12 @@ if($_SERVER["REQUEST_METHOD"] === "POST") {
                 break;
         }
     }
+}
+
+// PERF-02: Pre-fetch users list once for all static QR sub-form tabs
+if (isset($_SESSION['type']) && $_SESSION['type'] === 'super') {
+    require_once BASE_PATH . '/lib/Users/Users.php';
+    $allUsers = (new Users())->getAllUsers();
 }
 ?>
 <!DOCTYPE html>
@@ -219,7 +225,7 @@ if($_SERVER["REQUEST_METHOD"] === "POST") {
 
 <!-- Footer and scripts -->
 <?php include './includes/footer.php'; ?>
-<script src="dist/js/qr-preview.js?v=<?php echo time(); ?>"></script>
+<script src="dist/js/qr-preview.js?v=<?php echo urlencode($appVersionInfo['tag'] ?? '2.3.0'); ?>"></script>
 
 <!-- Page script -->
 <script type="text/javascript">

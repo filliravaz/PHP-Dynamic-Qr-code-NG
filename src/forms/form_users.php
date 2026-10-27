@@ -14,13 +14,13 @@
     
     <div class="col-sm-4">
         <div class="form-group">
-            <label for="password">Password *</label>
+            <label for="password">Password <?php echo ($edit) ? '' : '*'; ?></label>
             <div class="input-group">
                 <div class="input-group-prepend">
                     <span class="input-group-text"><i class="fa fa-lock"></i></span>
                 </div>
                 
-                <input type="password" name="password" placeholder="Password" class="form-control" required="required" autocomplete="off">
+                <input type="password" name="password" placeholder="<?php echo ($edit) ? 'Leave blank to keep current password' : 'Password'; ?>" class="form-control" <?php echo ($edit) ? '' : 'required="required"'; ?> autocomplete="off">
             </div>
         </div>
     </div>

@@ -46,16 +46,15 @@
                 <td><?php echo (int)$row['id']; ?></td>
                 <td>
                     <?php
-                    if(!isset($row['id_owner']))
-                        echo "";
-                    else {
+                    if (!empty($row['owner_username'])) {
+                        echo htmlspecialchars($row['owner_username'], ENT_QUOTES, 'UTF-8');
+                    } elseif (!empty($row['id_owner'])) {
                         require_once BASE_PATH . '/lib/Users/Users.php';
                         $users = new Users();
                         $user = $users->getUser($row['id_owner']);
-                        if($user !== NULL)
-                            echo htmlspecialchars($user["username"], ENT_QUOTES, 'UTF-8');
-                        else
-                            echo "";
+                        echo ($user !== null) ? htmlspecialchars($user["username"], ENT_QUOTES, 'UTF-8') : "";
+                    } else {
+                        echo "";
                     }
                     ?>
                 </td>

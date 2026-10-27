@@ -159,15 +159,15 @@ class vCard
     {
         if($sImgUrl != NULL){
             $sImgUrl = $this->cleanProp($sImgUrl);
-            $bIsImgExt = strtolower(substr(strrchr($sImgUrl, '.'), 1)); // Get the file extension.
+            $parsedPath = parse_url($sImgUrl, PHP_URL_PATH);
+            $bIsImgExt = strtolower(pathinfo($parsedPath ?: $sImgUrl, PATHINFO_EXTENSION));
 
-            if ($bIsImgExt == 'jpeg' || $bIsImgExt == 'jpg' || $bIsImgExt == 'png' || $bIsImgExt == 'gif') {
-                $sExt = strtoupper($bIsImgExt);
+            if (in_array($bIsImgExt, ['jpeg', 'jpg', 'png', 'gif', 'webp'], true)) {
+                $sExt = ($bIsImgExt === 'jpeg' || $bIsImgExt === 'jpg') ? 'JPEG' : strtoupper($bIsImgExt);
+                $this->sData .= 'PHOTO;VALUE=URL;TYPE='.$sExt.':'.$sImgUrl."\n";
             } else {
                 throw new InvalidArgumentException('Invalid format Image!');
             }
-
-            $this->sData .= 'PHOTO;VALUE=URL;TYPE='.$sExt.':'.$sImgUrl."\n";
 
             return $this;
         }

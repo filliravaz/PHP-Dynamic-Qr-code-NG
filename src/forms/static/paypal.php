@@ -51,14 +51,14 @@
         <div class="col-6 col-md-2">
             <div class="form-group">
                 <label>Amount *</label>
-                <input type="number" name="amount" value="" placeholder="" class="form-control">
+                <input type="number" step="0.01" min="0" name="amount" id="paypal_amount" value="" placeholder="" class="form-control">
             </div>
         </div>
         
         <div class="col-6 col-md-2">
         <div class="form-group">
             <label>Currency *</label>
-            <select name="currency" class="form-control">
+            <select name="currency" id="paypal_currency" class="form-control">
                   <option value="USD" selected>USD</option>
                   <option value="EUR">EUR</option>
                   <option value="AUD">AUD</option>
@@ -81,7 +81,7 @@
         <div class="col-6 col-md-2">
             <div class="form-group">
                 <label>Shipping </label>
-                <input type="number" name="shipping" value="" placeholder="" class="form-control">
+                <input type="number" step="0.01" min="0" name="shipping" id="paypal_shipping" value="" placeholder="" class="form-control">
             </div>
         </div>
         
@@ -109,3 +109,21 @@
 </div>
                 
 </form>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var currencySelect = document.getElementById('paypal_currency');
+    var amountInput = document.getElementById('paypal_amount');
+    var shippingInput = document.getElementById('paypal_shipping');
+    if (!currencySelect || !amountInput || !shippingInput) return;
+
+    var zeroDecimalCurrencies = ['HUF', 'JPY'];
+    function updatePrecision() {
+        var curr = currencySelect.value;
+        var step = zeroDecimalCurrencies.indexOf(curr) !== -1 ? '1' : '0.01';
+        amountInput.setAttribute('step', step);
+        shippingInput.setAttribute('step', step);
+    }
+    currencySelect.addEventListener('change', updatePrecision);
+    updatePrecision();
+});
+</script>

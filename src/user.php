@@ -14,6 +14,9 @@ $edit = false;
 if($_SERVER["REQUEST_METHOD"] === "GET" && isset($_GET["edit"]) && $_GET["edit"] == "true" && isset($_GET["id"])) {
     $edit = true;
     $user = $user_instance->getUser($_GET["id"]);
+    if (!$user) {
+        $user_instance->failure('User not found.');
+    }
 }
 
 if($_SERVER["REQUEST_METHOD"] === "POST") {
@@ -26,7 +29,6 @@ if($_SERVER["REQUEST_METHOD"] === "POST") {
     } else if(isset($_POST["edit"])) {
         if(
             isset($_POST["username"]) &&
-            isset($_POST["password"]) &&
             isset($_POST["type"]) &&
             isset($_POST["id"])
         )

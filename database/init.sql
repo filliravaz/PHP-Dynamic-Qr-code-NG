@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS `dynamic_qrcodes` (
   `id_owner` int(25) NULL DEFAULT NULL,
   `filename` varchar(45) NOT NULL,
   `format` varchar(45) DEFAULT NULL,
-  `identifier` longtext,
+  `identifier` varchar(32) NOT NULL,
   `link` varchar(500) DEFAULT NULL,
   `qrcode` varchar(60) DEFAULT NULL,
   `scan` int(11) NOT NULL DEFAULT '0',
@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS `dynamic_qrcodes` (
   `updated_by` int(10) unsigned NOT NULL DEFAULT '0',
   `updated_at` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_identifier` (`identifier`),
   KEY `id_owner` (`id_owner`),
   CONSTRAINT `fk_dynamic_owner` FOREIGN KEY (`id_owner`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -66,7 +67,8 @@ CREATE TABLE IF NOT EXISTS `login_attempts` (
   `attempted_at` datetime NOT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_ip_time` (`ip_address`, `attempted_at`),
-  KEY `idx_user_time` (`username`, `attempted_at`)
+  KEY `idx_user_time` (`username`, `attempted_at`),
+  KEY `idx_user_ip_time` (`username`, `ip_address`, `attempted_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `schema_version` (
@@ -76,5 +78,6 @@ CREATE TABLE IF NOT EXISTS `schema_version` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 INSERT INTO `schema_version` (`version`, `applied_at`) VALUES
-('2.0.0', NOW())
+('2.0.0', NOW()),
+('2.0.1', NOW())
 ON DUPLICATE KEY UPDATE `applied_at` = NOW();

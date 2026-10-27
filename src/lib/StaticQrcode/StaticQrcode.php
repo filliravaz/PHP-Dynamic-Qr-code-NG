@@ -187,6 +187,29 @@ class StaticQrcode {
      * create a qr code of type "vcard"
      * 
      */
+    /**
+     * Create a QR code of type "vcard" containing full contact card information.
+     *
+     * Catches avatar processing errors gracefully without fatal termination (ERR-03).
+     *
+     * @param string|null $fullname Full name of the contact.
+     * @param string|null $nickname Nickname of the contact.
+     * @param string|null $email Primary email address.
+     * @param string|null $website Website URL.
+     * @param string|null $phone Mobile phone number.
+     * @param string|null $home_phone Home telephone number.
+     * @param string|null $work_phone Work telephone number.
+     * @param string|null $company Organization or company name.
+     * @param string|null $role Job title or role.
+     * @param string|null $categories Contact categories.
+     * @param string|null $note Additional notes.
+     * @param string|null $photo Avatar photo URL.
+     * @param string|null $address Street address.
+     * @param string|null $city City.
+     * @param string|null $postcode Postal code.
+     * @param string|null $state State or region.
+     * @return void
+     */
     public function vcardQrcode($fullname, $nickname, $email, $website, $phone, $home_phone, $work_phone, $company, $role, $categories, $note, $photo, $address, $city, $postcode, $state)
     {
         if($fullname != NULL && $phone != NULL){
@@ -203,7 +226,11 @@ class StaticQrcode {
             $vcard->role($role); 
             $vcard->categories($categories); 
             $vcard->note($note); 
-            $vcard->photo($photo); 
+            try {
+                $vcard->photo($photo); 
+            } catch (\Throwable $e) {
+                // Gracefully ignore avatar loading failure rather than terminating (ERR-03)
+            }
             $vcard->address($address, $city, $postcode, $state); 
             $vcard->create();
             
@@ -238,13 +265,19 @@ class StaticQrcode {
     }
     
     /**
-     * create a qr code of type "event"
-     * @string description -> required
-     * @string start event -> required
-     * @string end event -> required
-     * @string location
-     * @string summary
-     * @string url
+     * Create a QR code of type "event" (iCalendar / ICS format).
+     *
+     * Validates start and end datetime and timezone strings with comprehensive
+     * error handling against malformed inputs (ERR-02).
+     *
+     * @param string|null $title Event title/summary (required).
+     * @param string|null $start Start datetime string (required).
+     * @param string|null $end End datetime string (required).
+     * @param string|null $timezone Timezone identifier (e.g. Europe/Berlin).
+     * @param string|null $location Event physical or virtual location.
+     * @param string|null $description Event description text.
+     * @param string|null $url Event related web link.
+     * @return void
      */
     public function eventQrcode($title, $start, $end, $timezone, $location, $description, $url)
     {
@@ -255,10 +288,14 @@ class StaticQrcode {
                 $timezoneFrom = 'Europe/Berlin';
             }
 
-            $tmpStart = new DateTime($start, new DateTimeZone($timezoneFrom));
-            $tmpEnd = new DateTime($end, new DateTimeZone($timezoneFrom));
-            $tmpStart->setTimezone(new DateTimeZone("UTC"));
-            $tmpEnd->setTimezone(new DateTimeZone("UTC"));
+            try {
+                $tmpStart = new DateTime($start, new DateTimeZone($timezoneFrom));
+                $tmpEnd = new DateTime($end, new DateTimeZone($timezoneFrom));
+                $tmpStart->setTimezone(new DateTimeZone("UTC"));
+                $tmpEnd->setTimezone(new DateTimeZone("UTC"));
+            } catch (\Throwable $e) {
+                $this->failure('Invalid date or timezone format.');
+            }
 
             $ics = new ICS(array(
                 'location' => $location,
@@ -348,14 +385,46 @@ class StaticQrcode {
     public function paypalQrcode($payment_type, $email, $item_name, $item_id, $amount, $currency, $shipping, $tax_rate)
     {
         if($email != NULL && $item_name != NULL && $amount != NULL){
+            $currencyUpper = strtoupper(trim((string)$currency));
+            $zeroDecimalCurrencies = ['HUF', 'JPY', 'TWD'];
+            $maxDecimals = in_array($currencyUpper, $zeroDecimalCurrencies, true) ? 0 : 2;
+
+            $cleanAmount = str_replace(',', '.', trim((string)$amount));
+            if (!is_numeric($cleanAmount) || (float)$cleanAmount < 0 || !preg_match('/^\d+(?:\.\d+)?$/', $cleanAmount)) {
+                $this->failure('Invalid payment amount provided.');
+            }
+            $amountDecimals = 0;
+            if (strpos($cleanAmount, '.') !== false) {
+                $fractional = substr($cleanAmount, strpos($cleanAmount, '.') + 1);
+                $amountDecimals = strlen(rtrim($fractional, '0'));
+            }
+            if ($amountDecimals > $maxDecimals) {
+                $this->failure("Amount exceeds maximum allowed decimal places ({$maxDecimals}) for currency {$currencyUpper}.");
+            }
+
+            $cleanShipping = ($shipping !== null && trim((string)$shipping) !== '') ? str_replace(',', '.', trim((string)$shipping)) : '';
+            if ($cleanShipping !== '') {
+                if (!is_numeric($cleanShipping) || (float)$cleanShipping < 0 || !preg_match('/^\d+(?:\.\d+)?$/', $cleanShipping)) {
+                    $this->failure('Invalid shipping amount provided.');
+                }
+                $shippingDecimals = 0;
+                if (strpos($cleanShipping, '.') !== false) {
+                    $fractional = substr($cleanShipping, strpos($cleanShipping, '.') + 1);
+                    $shippingDecimals = strlen(rtrim($fractional, '0'));
+                }
+                if ($shippingDecimals > $maxDecimals) {
+                    $this->failure("Shipping exceeds maximum allowed decimal places ({$maxDecimals}) for currency {$currencyUpper}.");
+                }
+            }
+
             $this->sData = 'https://www.paypal.com/webapps/xorouter?' . http_build_query([
                 'cmd' => $payment_type,
                 'business' => $email,
                 'item_name' => $item_name,
                 'item_number' => $item_id,
-                'amount' => $amount,
+                'amount' => $cleanAmount,
                 'currency_code' => $currency,
-                'shipping' => $shipping,
+                'shipping' => $cleanShipping !== '' ? $cleanShipping : $shipping,
                 'tax_rate' => $tax_rate
             ]);
             
@@ -368,9 +437,9 @@ class StaticQrcode {
             
             $this->sContent .= '<div class="col-sm-4">';
             
-                $this->sContent .= '<strong>Amount:</strong> ' . htmlspecialchars($amount, ENT_QUOTES, 'UTF-8') . '<br>' .
+                $this->sContent .= '<strong>Amount:</strong> ' . htmlspecialchars($cleanAmount, ENT_QUOTES, 'UTF-8') . '<br>' .
                                    '<strong>Currency:</strong> ' . htmlspecialchars($currency, ENT_QUOTES, 'UTF-8') . '<br>' .
-                                   '<strong>Shipping:</strong> ' . htmlspecialchars($shipping, ENT_QUOTES, 'UTF-8') . '<br>' .
+                                   '<strong>Shipping:</strong> ' . htmlspecialchars($cleanShipping !== '' ? $cleanShipping : $shipping, ENT_QUOTES, 'UTF-8') . '<br>' .
                                    '<strong>Tax rate:</strong> ' . htmlspecialchars($tax_rate, ENT_QUOTES, 'UTF-8') . '</div>';
                 
             $this->sContent .= '</div>';
@@ -391,7 +460,18 @@ class StaticQrcode {
     public function bitcoinQrcode($address, $amount, $label, $message)
     {
         if($address != NULL && $amount != NULL){
-            $btcParams = ['amount' => $amount];
+            $cleanAmount = str_replace(',', '.', trim((string)$amount));
+            if (!preg_match('/^(?:0|[1-9]\d*)(?:\.\d+)?$/', $cleanAmount) || (float)$cleanAmount < 0.00000001) {
+                $this->failure('Invalid Bitcoin amount provided. Minimum amount is 0.00000001 (1 satoshi).');
+            }
+            if (strpos($cleanAmount, '.') !== false) {
+                $decimalPart = substr($cleanAmount, strpos($cleanAmount, '.') + 1);
+                if (strlen($decimalPart) > 8) {
+                    $this->failure('Bitcoin amount cannot exceed 8 decimal places (1 satoshi precision).');
+                }
+            }
+
+            $btcParams = ['amount' => $cleanAmount];
             if ($label !== null && $label !== '') {
                 $btcParams['label'] = $label;
             }
@@ -400,7 +480,7 @@ class StaticQrcode {
             }
             $this->sData = 'bitcoin:' . rawurlencode($address) . '?' . http_build_query($btcParams);
             $this->sContent = '<strong>BTC address:</strong> ' . htmlspecialchars($address, ENT_QUOTES, 'UTF-8') . '<br>' .
-                              '<strong>Amount:</strong> ' . htmlspecialchars($amount, ENT_QUOTES, 'UTF-8') . '<br>' .
+                              '<strong>Amount:</strong> ' . htmlspecialchars($cleanAmount, ENT_QUOTES, 'UTF-8') . '<br>' .
                               '<strong>Label:</strong> ' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '<br>' .
                               '<strong>Message:</strong> ' . htmlspecialchars($message, ENT_QUOTES, 'UTF-8');
         
@@ -1217,7 +1297,7 @@ class StaticQrcode {
 
         $data_to_db['created_at'] = date('Y-m-d H:i:s');
         $data_to_db['created_by'] = (int)$_SESSION['user_id'];
-        $data_to_db['filename'] = $this->qrcode_instance->sanitizeFilename($_POST['filename']);
+        $data_to_db['filename'] = $this->qrcode_instance->sanitizeFilename($_POST['filename'] ?? '');
         $data_to_db['type'] = $type;
         $data_to_db['format'] = strtolower(trim($_POST['format'] ?? 'png'));
         $data_to_db['qrcode'] = $data_to_db['filename'].'.'.$data_to_db['format'];
@@ -1248,8 +1328,10 @@ class StaticQrcode {
     }
     
     /**
-     * Edit qr code
-     * 
+     * Edit static QR code metadata and update database record (BUG-01).
+     *
+     * @param array $input_data Form input parameters including id, filename, and owner.
+     * @return void
      */
     public function editQrcode($input_data) {
         $existing = $this->getQrcode($input_data["id"]);
@@ -1263,14 +1345,17 @@ class StaticQrcode {
         }
 
         $data_to_db['filename'] = $this->qrcode_instance->sanitizeFilename($input_data['filename']);
-        $data_to_db['created_at'] = date('Y-m-d H:i:s');
+        $data_to_db['updated_at'] = date('Y-m-d H:i:s');
 
         $this->qrcode_instance->editQrcode($input_data, $data_to_db);
     }
     
     /**
-     * Delete qr code
-     * 
+     * Delete static QR code entry and remove underlying generated file.
+     *
+     * @param int|string $id QR code identifier.
+     * @param bool $async Whether to suppress user redirect on asynchronous deletion.
+     * @return void
      */
     public function deleteQrcode($id, $async = false) {
         if($_SESSION['type'] === "super") {

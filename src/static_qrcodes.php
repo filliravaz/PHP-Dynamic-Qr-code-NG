@@ -7,16 +7,34 @@ require_once BASE_PATH . '/lib/StaticQrcode/StaticQrcode.php';
 $db = getDbInstance();
 $static_qrcode = new StaticQrcode();
 
-$select = array('id', 'id_owner', 'filename', 'type', 'content', 'qrcode', 'created_at', 'updated_at');
+$prefix = defined('DATABASE_PREFIX') ? DATABASE_PREFIX : '';
+$order_table = $prefix . 'static_qrcodes';
+$allowed_columns = array('id', 'id_owner', 'filename', 'type', 'content', 'qrcode', 'created_at', 'updated_at');
+$select = array(
+    $order_table . '.id',
+    $order_table . '.id_owner',
+    $order_table . '.filename',
+    $order_table . '.type',
+    $order_table . '.content',
+    $order_table . '.qrcode',
+    $order_table . '.created_at',
+    $order_table . '.updated_at',
+    'u.username AS owner_username'
+);
 $search_fields = array('filename', 'type', 'content');
 require_once BASE_PATH . '/includes/search_order.php';
-$page = filter_input(INPUT_GET, 'page', FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?? 1;
+$page = filter_input(INPUT_GET, 'page', FILTER_VALIDATE_INT);
+if (!$page || $page < 1) {
+    $page = 1;
+}
 $db->pageLimit = 15;
 
 if($_SESSION['type'] !== 'super') {
-    $db->where('id_owner', (int)$_SESSION['user_id']);
+    $db->where($order_table . '.id_owner', (int)$_SESSION['user_id']);
 }
 
+// PERF-01: Join users table to resolve owner username in a single query
+$db->join('users u', 'u.id = ' . $order_table . '.id_owner', 'LEFT');
 $rows = $db->arraybuilder()->paginate('static_qrcodes', $page, $select);
 $total_pages = $db->totalPages;
 ?>
