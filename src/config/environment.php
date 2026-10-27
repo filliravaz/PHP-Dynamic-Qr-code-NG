@@ -10,10 +10,12 @@ define('DATABASE_PORT', filter_var(getenv('DATABASE_PORT'), FILTER_VALIDATE_INT)
 define('DATABASE_NAME', getenv('DATABASE_NAME') ?: 'qrcode');
 define('DATABASE_USER', getenv('DATABASE_USER') ?: 'root');
 define('DATABASE_PASSWORD', getenv('DATABASE_PASSWORD') ?: 'root');
-define('DATABASE_PREFIX', getenv('DATABASE_PREFIX') !== false ? getenv('DATABASE_PREFIX') : '');
+define('DATABASE_PREFIX', getenv('DATABASE_PREFIX') !== false ? getenv('DATABASE_PREFIX') : 'qr_');
 define('DATABASE_CHARSET', getenv('DATABASE_CHARSET') ?: 'utf8mb4');
 
 define('TYPE', getenv('TYPE') ?: 'local');
+// BASE_URL must contain only the site origin (scheme, host, optional port, e.g. "https://localhost" or "https://example.com").
+// Do not include subfolder paths or trailing slashes, as SCRIPT_FOLDER is appended automatically.
 define('BASE_URL', getenv('BASE_URL') ?: 'http://localhost');
 define('FORCE_HTTPS', filter_var(getenv('FORCE_HTTPS'), FILTER_VALIDATE_BOOLEAN));
 define('TRUSTED_PROXIES', getenv('TRUSTED_PROXIES') !== false ? getenv('TRUSTED_PROXIES') : '');

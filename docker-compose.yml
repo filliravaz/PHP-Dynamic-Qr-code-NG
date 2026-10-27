@@ -5,7 +5,7 @@ services:
     environment:
       TYPE: "docker"
       QRCODE_GENERATOR: "internal-endroid.qrcode"
-      BASE_URL: "${BASE_URL:-http://localhost}"
+      BASE_URL: "${BASE_URL:-https://localhost}"
       FORCE_HTTPS: "${FORCE_HTTPS:-false}"
       TRUSTED_PROXIES: "${TRUSTED_PROXIES:-}"
       DATABASE_HOST: "php-dynamic-qrcode-db"
@@ -57,9 +57,10 @@ services:
     #       docker rm -f test-mariadb && docker volume rm test_mariadb_data
     #
     # 3. Production Migration Procedure:
-    #    a. In docker-compose.yml, temporarily comment out or disable the database/init.sql volume mount
-    #       under php-dynamic-qrcode-db (preventing init.sql from executing on the fresh volume and falsely recording schema 2.0.0):
-    #       # - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    #    a. In docker-compose.yml, temporarily comment out or disable the database initialization volume mounts
+    #       under php-dynamic-qrcode-db (preventing init from executing on the fresh volume and falsely recording schema):
+    #       # - ./database/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+    #       # - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql.template:ro
     #    b. Start the Compose-managed database service:
     #       docker compose up -d php-dynamic-qrcode-db
     #    c. Create a protected client option file in the database container using the configured
@@ -71,20 +72,22 @@ services:
     #       docker compose exec php-dynamic-qrcode-db rm -f /tmp/my.cnf
     #    f. Run database schema upgrade CLI inside the PHP container through Compose:
     #       docker compose run --rm php-dynamic-qrcode php upgrade/upgrade.php
-    #    g. Restore the ./database/init.sql volume mount in docker-compose.yml.
+    #    g. Restore the ./database/init.sh and ./database/init.sql volume mounts in docker-compose.yml.
     #    h. Start the full application stack:
     #       docker compose up -d
     #
-    # Fresh installations (no existing data) automatically use the mounted database/init.sql below.
+    # Fresh installations (no existing data) automatically use the mounted database initialization scripts below with the configured DATABASE_PREFIX.
     # -------------------------------------------------------------------------
     image: "mariadb:11.4"
     restart: "unless-stopped"
     volumes:
       - php_dynamic_qrcode_db_data:/var/lib/mysql
-      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./database/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql.template:ro
     ports:
       - '127.0.0.1:13306:3306'
     environment:
+      DATABASE_PREFIX: "${DATABASE_PREFIX:-}"
       MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-changeme}"
       MYSQL_DATABASE: "${MYSQL_DATABASE:-qrcode}"
       MYSQL_USER: "${MYSQL_USER:-qrcode}"

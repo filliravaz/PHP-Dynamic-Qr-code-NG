@@ -385,14 +385,44 @@ class StaticQrcode {
     public function paypalQrcode($payment_type, $email, $item_name, $item_id, $amount, $currency, $shipping, $tax_rate)
     {
         if($email != NULL && $item_name != NULL && $amount != NULL){
+            $currencyUpper = strtoupper(trim((string)$currency));
+            $zeroDecimalCurrencies = ['HUF', 'JPY', 'TWD'];
+            $maxDecimals = in_array($currencyUpper, $zeroDecimalCurrencies, true) ? 0 : 2;
+
+            $cleanAmount = str_replace(',', '.', trim((string)$amount));
+            if (!is_numeric($cleanAmount) || (float)$cleanAmount < 0) {
+                $this->failure('Invalid payment amount provided.');
+            }
+            $amountDecimals = 0;
+            if (strpos($cleanAmount, '.') !== false) {
+                $amountDecimals = strlen(substr($cleanAmount, strpos($cleanAmount, '.') + 1));
+            }
+            if ($amountDecimals > $maxDecimals) {
+                $this->failure("Amount exceeds maximum allowed decimal places ({$maxDecimals}) for currency {$currencyUpper}.");
+            }
+
+            $cleanShipping = ($shipping !== null && trim((string)$shipping) !== '') ? str_replace(',', '.', trim((string)$shipping)) : '';
+            if ($cleanShipping !== '') {
+                if (!is_numeric($cleanShipping) || (float)$cleanShipping < 0) {
+                    $this->failure('Invalid shipping amount provided.');
+                }
+                $shippingDecimals = 0;
+                if (strpos($cleanShipping, '.') !== false) {
+                    $shippingDecimals = strlen(substr($cleanShipping, strpos($cleanShipping, '.') + 1));
+                }
+                if ($shippingDecimals > $maxDecimals) {
+                    $this->failure("Shipping exceeds maximum allowed decimal places ({$maxDecimals}) for currency {$currencyUpper}.");
+                }
+            }
+
             $this->sData = 'https://www.paypal.com/webapps/xorouter?' . http_build_query([
                 'cmd' => $payment_type,
                 'business' => $email,
                 'item_name' => $item_name,
                 'item_number' => $item_id,
-                'amount' => $amount,
+                'amount' => $cleanAmount,
                 'currency_code' => $currency,
-                'shipping' => $shipping,
+                'shipping' => $cleanShipping !== '' ? $cleanShipping : $shipping,
                 'tax_rate' => $tax_rate
             ]);
             
@@ -405,9 +435,9 @@ class StaticQrcode {
             
             $this->sContent .= '<div class="col-sm-4">';
             
-                $this->sContent .= '<strong>Amount:</strong> ' . htmlspecialchars($amount, ENT_QUOTES, 'UTF-8') . '<br>' .
+                $this->sContent .= '<strong>Amount:</strong> ' . htmlspecialchars($cleanAmount, ENT_QUOTES, 'UTF-8') . '<br>' .
                                    '<strong>Currency:</strong> ' . htmlspecialchars($currency, ENT_QUOTES, 'UTF-8') . '<br>' .
-                                   '<strong>Shipping:</strong> ' . htmlspecialchars($shipping, ENT_QUOTES, 'UTF-8') . '<br>' .
+                                   '<strong>Shipping:</strong> ' . htmlspecialchars($cleanShipping !== '' ? $cleanShipping : $shipping, ENT_QUOTES, 'UTF-8') . '<br>' .
                                    '<strong>Tax rate:</strong> ' . htmlspecialchars($tax_rate, ENT_QUOTES, 'UTF-8') . '</div>';
                 
             $this->sContent .= '</div>';
@@ -428,7 +458,18 @@ class StaticQrcode {
     public function bitcoinQrcode($address, $amount, $label, $message)
     {
         if($address != NULL && $amount != NULL){
-            $btcParams = ['amount' => $amount];
+            $cleanAmount = str_replace(',', '.', trim((string)$amount));
+            if (!preg_match('/^(?:0|[1-9]\d*)(?:\.\d+)?$/', $cleanAmount) || (float)$cleanAmount < 0.00000001) {
+                $this->failure('Invalid Bitcoin amount provided. Minimum amount is 0.00000001 (1 satoshi).');
+            }
+            if (strpos($cleanAmount, '.') !== false) {
+                $decimalPart = substr($cleanAmount, strpos($cleanAmount, '.') + 1);
+                if (strlen($decimalPart) > 8) {
+                    $this->failure('Bitcoin amount cannot exceed 8 decimal places (1 satoshi precision).');
+                }
+            }
+
+            $btcParams = ['amount' => $cleanAmount];
             if ($label !== null && $label !== '') {
                 $btcParams['label'] = $label;
             }
@@ -437,7 +478,7 @@ class StaticQrcode {
             }
             $this->sData = 'bitcoin:' . rawurlencode($address) . '?' . http_build_query($btcParams);
             $this->sContent = '<strong>BTC address:</strong> ' . htmlspecialchars($address, ENT_QUOTES, 'UTF-8') . '<br>' .
-                              '<strong>Amount:</strong> ' . htmlspecialchars($amount, ENT_QUOTES, 'UTF-8') . '<br>' .
+                              '<strong>Amount:</strong> ' . htmlspecialchars($cleanAmount, ENT_QUOTES, 'UTF-8') . '<br>' .
                               '<strong>Label:</strong> ' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '<br>' .
                               '<strong>Message:</strong> ' . htmlspecialchars($message, ENT_QUOTES, 'UTF-8');
         

@@ -2,7 +2,7 @@
 require_once dirname(__DIR__) . '/config/environment.php';
 
 $isCli = (php_sapi_name() === 'cli');
-define('TARGET_VERSION', '2.0.0');
+define('TARGET_VERSION', '2.0.1');
 
 /**
  * Outputs a message formatted appropriately for CLI or web browser contexts.
@@ -54,7 +54,56 @@ if (!$isCli) {
         exit(1);
     }
 
-    require_once dirname(__DIR__) . '/includes/auth_validate.php';
+    // Schema-compatible session validation (SEC-09):
+    // Validate session against database without requiring 2.0.0 columns (must_change_password, session_version)
+    // so legacy installations can authenticate and run the migration in the browser.
+    $authConn = new mysqli(DATABASE_HOST, DATABASE_USER, DATABASE_PASSWORD, DATABASE_NAME, DATABASE_PORT);
+    if ($authConn->connect_error) {
+        http_response_code(500);
+        outputMessage("Database connection failed during authentication check: " . $authConn->connect_error, false);
+        exit(1);
+    }
+
+    $usersTable = DATABASE_PREFIX . 'users';
+    $uCheck = $authConn->query("SHOW TABLES LIKE '{$usersTable}'");
+    if ($uCheck && $uCheck->num_rows > 0) {
+        $uStmt = $authConn->prepare("SELECT `id`, `type` FROM `{$usersTable}` WHERE `id` = ?");
+        if ($uStmt) {
+            $sessUid = (int)$_SESSION['user_id'];
+            $uStmt->bind_param('i', $sessUid);
+            $uStmt->execute();
+            $uRes = $uStmt->get_result();
+            $uRow = $uRes ? $uRes->fetch_assoc() : null;
+            $uStmt->close();
+
+            if (!$uRow || ($uRow['type'] ?? '') !== 'super') {
+                $authConn->close();
+                http_response_code(403);
+                outputMessage("Forbidden: Your session is no longer an active super administrator.", false);
+                exit(1);
+            }
+
+            // If session_version column exists, validate it
+            $svColCheck = $authConn->query("SHOW COLUMNS FROM `{$usersTable}` LIKE 'session_version'");
+            if ($svColCheck && $svColCheck->num_rows > 0) {
+                $svStmt = $authConn->prepare("SELECT `session_version` FROM `{$usersTable}` WHERE `id` = ?");
+                if ($svStmt) {
+                    $svStmt->bind_param('i', $sessUid);
+                    $svStmt->execute();
+                    $svRes = $svStmt->get_result();
+                    $svRow = $svRes ? $svRes->fetch_assoc() : null;
+                    $svStmt->close();
+                    if ($svRow && isset($_SESSION['session_version']) && (int)$svRow['session_version'] !== (int)$_SESSION['session_version']) {
+                        $authConn->close();
+                        http_response_code(403);
+                        outputMessage("Forbidden: Session expired. Please log in again.", false);
+                        exit(1);
+                    }
+                }
+            }
+        }
+    }
+    $authConn->close();
 }
 
 $conn = new mysqli(DATABASE_HOST, DATABASE_USER, DATABASE_PASSWORD, DATABASE_NAME, DATABASE_PORT);
@@ -359,20 +408,89 @@ if ($conn->query($laSql) === TRUE) {
     abortMigration($conn, "Error creating login_attempts table: " . $conn->error, $isCli);
 }
 
-// Ensure dynamic_qrcodes identifier column is indexed VARCHAR(32) (SEC-07)
+// Ensure dynamic_qrcodes identifier column is non-nullable VARCHAR(32) and uniquely indexed (SEC-07)
 $dynTable = DATABASE_PREFIX . 'dynamic_qrcodes';
 $dynTableCheck = $conn->query("SHOW TABLES LIKE '{$dynTable}'");
 if ($dynTableCheck && $dynTableCheck->num_rows > 0) {
     $idColCheck = $conn->query("SHOW COLUMNS FROM `{$dynTable}` LIKE 'identifier'");
     if ($idColCheck && $idColCheck->num_rows > 0) {
         $colRow = $idColCheck->fetch_assoc();
-        if (stripos($colRow['Type'] ?? '', 'varchar(32)') === false) {
-            $conn->query("ALTER TABLE `{$dynTable}` MODIFY `identifier` VARCHAR(32) NOT NULL");
+        $isVarchar32 = (strtolower(trim($colRow['Type'] ?? '')) === 'varchar(32)');
+        $isNotNull = (strtoupper(trim($colRow['Null'] ?? '')) === 'NO');
+
+        // Only skip the ALTER TABLE when the column matches VARCHAR(32) and is non-nullable
+        if (!$isVarchar32 || !$isNotNull) {
+            // Audit existing identifier values and resolve nulls, overlength values, and collisions before narrowing
+            $rowsRes = $conn->query("SELECT `id`, `identifier` FROM `{$dynTable}` ORDER BY `id` ASC");
+            if ($rowsRes === false) {
+                abortMigration($conn, "Failed querying dynamic QR codes to audit identifiers: " . $conn->error, $isCli);
+            }
+
+            $usedIdentifiers = [];
+            $recordsToFix = [];
+
+            while ($row = $rowsRes->fetch_assoc()) {
+                $rawId = $row['identifier'];
+                $isValid = ($rawId !== null && $rawId !== '' && strlen($rawId) <= 32);
+
+                if ($isValid && !isset($usedIdentifiers[$rawId])) {
+                    // Non-colliding, valid identifier: preserve existing identifier and link
+                    $usedIdentifiers[$rawId] = true;
+                } else {
+                    $recordsToFix[] = $row;
+                }
+            }
+            $rowsRes->close();
+
+            if (!empty($recordsToFix)) {
+                $upStmt = $conn->prepare("UPDATE `{$dynTable}` SET `identifier` = ? WHERE `id` = ?");
+                if (!$upStmt) {
+                    abortMigration($conn, "Failed to prepare identifier update query: " . $conn->error, $isCli);
+                }
+
+                foreach ($recordsToFix as $rec) {
+                    $origId = $rec['identifier'];
+                    $recId = (int)$rec['id'];
+                    $newId = null;
+
+                    // If overlength, attempt to preserve prefix if it does not collide
+                    if ($origId !== null && $origId !== '' && strlen($origId) > 32) {
+                        $candidate = substr($origId, 0, 32);
+                        if (!isset($usedIdentifiers[$candidate])) {
+                            $newId = $candidate;
+                        }
+                    }
+
+                    // Generate unique 16-hex character identifier if missing or colliding
+                    while ($newId === null || isset($usedIdentifiers[$newId])) {
+                        $newId = bin2hex(random_bytes(8));
+                    }
+
+                    $usedIdentifiers[$newId] = true;
+
+                    if (!$upStmt->bind_param('si', $newId, $recId) || !$upStmt->execute()) {
+                        $err = $upStmt->error;
+                        $upStmt->close();
+                        abortMigration($conn, "Failed updating identifier for dynamic QR ID {$recId}: " . $err, $isCli);
+                    }
+                }
+                $upStmt->close();
+                outputMessage("Audited and resolved " . count($recordsToFix) . " dynamic QR identifier records.", $isCli);
+            }
+
+            if ($conn->query("ALTER TABLE `{$dynTable}` MODIFY `identifier` VARCHAR(32) NOT NULL") === false) {
+                abortMigration($conn, "Failed to alter dynamic_qrcodes identifier column to VARCHAR(32) NOT NULL: " . $conn->error, $isCli);
+            }
+            outputMessage("The identifier column in dynamic_qrcodes was updated to VARCHAR(32) NOT NULL.", $isCli);
         }
     }
+
     $idxCheck = $conn->query("SHOW INDEX FROM `{$dynTable}` WHERE Key_name = 'idx_identifier'");
     if ($idxCheck && $idxCheck->num_rows === 0) {
-        $conn->query("ALTER TABLE `{$dynTable}` ADD UNIQUE KEY `idx_identifier` (`identifier`)");
+        if ($conn->query("ALTER TABLE `{$dynTable}` ADD UNIQUE KEY `idx_identifier` (`identifier`)") === false) {
+            abortMigration($conn, "Failed to add unique key idx_identifier to dynamic_qrcodes: " . $conn->error, $isCli);
+        }
+        outputMessage("Unique index idx_identifier added to dynamic_qrcodes.", $isCli);
     }
 }
 

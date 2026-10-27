@@ -890,9 +890,6 @@ class Qrcode {
     public function editQrcode(array $input_data, array $data_to_db): void {
         $db = getDbInstance();
         $old_qrcode = $this->getQrcode($input_data["id"]);
-        if (!$old_qrcode) {
-            $this->failure('QR code not found.');
-        }
 
         $data_to_db['filename'] = $this->sanitizeFilename($data_to_db['filename']);
         // SEC-06: Preserve existing disk storage filename
@@ -918,7 +915,8 @@ class Qrcode {
      */
     public function deleteQrcode(int $id, bool $async = false): void {
         $db = getDbInstance();
-        $qrcode = $this->getQrcode($id);
+        $db->where('id', (int)$id);
+        $qrcode = $db->getOne($this->table);
         if (!$qrcode) {
             if (!$async) {
                 $this->failure('QR code not found.');

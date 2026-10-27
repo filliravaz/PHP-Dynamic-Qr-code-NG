@@ -101,7 +101,13 @@ function isTrustedProxy($ip) {
 		if (strpos($proxy, '/') !== false) {
 			[$subnet, $bits] = explode('/', $proxy, 2);
 			if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) && filter_var($subnet, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+				if (!preg_match('/^(?:0|[1-9]\d*)$/', $bits)) {
+					continue;
+				}
 				$bitNum = (int)$bits;
+				if ($bitNum > 32) {
+					continue;
+				}
 				if ($bitNum === 0) {
 					return true;
 				}
@@ -296,7 +302,16 @@ function paginationLinks($current_page, $total_pages, $base_url) {
 function base_url() {
     require_once(__DIR__ . '/../config/environment.php');
     if (defined('BASE_URL') && BASE_URL !== null) {
-        return BASE_URL;
+        $rawUrl = (string)BASE_URL;
+        $parts = parse_url($rawUrl);
+        if (!empty($parts['scheme']) && !empty($parts['host'])) {
+            $origin = $parts['scheme'] . '://' . $parts['host'];
+            if (!empty($parts['port'])) {
+                $origin .= ':' . $parts['port'];
+            }
+            return $origin;
+        }
+        return rtrim($rawUrl, '/');
     } else {
         return sprintf(
             "%s://%s:%s",

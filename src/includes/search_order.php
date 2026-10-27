@@ -31,7 +31,7 @@ if (!empty($search_str) && isset($search_fields) && is_array($search_fields)) {
     }
 }
 
-// Apply whitelisted ordering to query (with table prefix if joining, to avoid ambiguity)
-$orderCol = (!empty($order_table)) ? "`{$order_table}`.`{$order_by}`" : $order_by;
+// Apply whitelisted ordering to query (pass unquoted qualified name to prevent MysqliDb::orderBy from double-prepending DATABASE_PREFIX)
+$orderCol = (!empty($order_table)) ? "{$order_table}.{$order_by}" : $order_by;
 $db->orderBy($orderCol, $order_dir);
 ?>

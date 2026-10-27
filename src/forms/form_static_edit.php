@@ -13,14 +13,25 @@
             <div class="form-group">
                 <label for="id_owner">Owner *</label>
                 <select name="id_owner" class="form-control">
-                    <option value="" <?php echo empty($static_qrcode['id_owner']) ? 'selected' : ''; ?>>All</option>
+                    <option value="" <?php echo empty($static_qrcode['id_owner']) ? 'selected' : ''; ?>>Unassigned (superuser only)</option>
                     <?php
                     require_once BASE_PATH . '/lib/Users/Users.php';
                     $users_instance = new Users();
                     $users = $users_instance->getAllUsers();
-                    foreach ($users as $user) {
-                        $selected = (!empty($static_qrcode['id_owner']) && (int)$user['id'] === (int)$static_qrcode['id_owner']) ? 'selected' : '';
-                        echo '<option value="' . (int)$user["id"] . '" ' . $selected . '>' . htmlspecialchars($user["username"], ENT_QUOTES, 'UTF-8') . '</option>';
+                    $currentOwnerId = !empty($static_qrcode['id_owner']) ? (int)$static_qrcode['id_owner'] : null;
+                    $ownerFound = false;
+                    if (is_array($users)) {
+                        foreach ($users as $user) {
+                            $isMatch = ($currentOwnerId !== null && (int)$user['id'] === $currentOwnerId);
+                            if ($isMatch) {
+                                $ownerFound = true;
+                            }
+                            $selected = $isMatch ? 'selected' : '';
+                            echo '<option value="' . (int)$user["id"] . '" ' . $selected . '>' . htmlspecialchars($user["username"], ENT_QUOTES, 'UTF-8') . '</option>';
+                        }
+                    }
+                    if ($currentOwnerId !== null && !$ownerFound) {
+                        echo '<option value="' . $currentOwnerId . '" selected>Current Owner (ID: ' . $currentOwnerId . ' - unavailable)</option>';
                     }
                     ?>
                 </select>

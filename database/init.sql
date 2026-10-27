@@ -78,5 +78,6 @@ CREATE TABLE IF NOT EXISTS `schema_version` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 INSERT INTO `schema_version` (`version`, `applied_at`) VALUES
-('2.0.0', NOW())
+('2.0.0', NOW()),
+('2.0.1', NOW())
 ON DUPLICATE KEY UPDATE `applied_at` = NOW();

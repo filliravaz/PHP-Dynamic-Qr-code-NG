@@ -158,15 +158,11 @@ class Users
             $this->failure('User not found.');
         }
 
-        // SEC-04: Prevent self-demotion and last superadmin demotion
-        if (($currentUser['type'] ?? '') === 'super' && $input_data['type'] !== 'super') {
+        // SEC-04: Prevent self-demotion
+        $isDemotingSuper = (($currentUser['type'] ?? '') === 'super' && $input_data['type'] !== 'super');
+        if ($isDemotingSuper) {
             if (isset($_SESSION['user_id']) && (int)$_SESSION['user_id'] === $userId) {
                 $this->failure('You cannot demote your own account.', $location);
-            }
-            $db->where('type', 'super');
-            $superCount = $db->getValue('users', 'count(*)');
-            if ($superCount !== null && (int)$superCount <= 1) {
-                $this->failure('Cannot demote the last superadmin account.', $location);
             }
         }
 
@@ -208,12 +204,30 @@ class Users
             }
         }
 
+        // SEC-04: Enforce atomic check and update for last superadmin demotion
+        if ($isDemotingSuper) {
+            $db->startTransaction();
+            $db->setQueryOption('FOR UPDATE');
+            $db->where('type', 'super');
+            $superCount = $db->getValue('users', 'count(*)');
+            if ($superCount !== null && (int)$superCount <= 1) {
+                $db->rollback();
+                $this->failure('Cannot demote the last superadmin account.', $location);
+            }
+        }
+
         $db->where('id', $userId);
         $stat = $db->update('users', $data_to_db);
         
         if ($stat) {
+            if ($isDemotingSuper) {
+                $db->commit();
+            }
             $this->success('User updated successfully!');
         } else {
+            if ($isDemotingSuper) {
+                $db->rollback();
+            }
             error_log('Failed to update User: ' . $db->getLastError());
             $this->failure('Failed to update User.');
         }
@@ -246,17 +260,20 @@ class Users
             $this->failure('User not found.');
         }
 
-        // SEC-04: Prevent deleting last superadmin account
-        if (($userToDelete['type'] ?? '') === 'super') {
-            $db = getDbInstance();
+        $isDeletingSuper = (($userToDelete['type'] ?? '') === 'super');
+        $db = getDbInstance();
+        // SEC-04: Enforce atomic check and delete for last superadmin
+        if ($isDeletingSuper) {
+            $db->startTransaction();
+            $db->setQueryOption('FOR UPDATE');
             $db->where('type', 'super');
             $superCount = $db->getValue('users', 'count(*)');
             if ($superCount !== null && (int)$superCount <= 1) {
+                $db->rollback();
                 $this->failure('Cannot delete the last superadmin account.');
             }
         }
         
-        $db = getDbInstance();
         // Disassociate orphaned QR codes before deleting user
         $db->where('id_owner', $targetId);
         $db->update('dynamic_qrcodes', ['id_owner' => null]);
@@ -267,8 +284,14 @@ class Users
         $stat = $db->delete('users');
 
         if ($stat) {
+            if ($isDeletingSuper) {
+                $db->commit();
+            }
             $this->info('User deleted successfully!');
         } else {
+            if ($isDeletingSuper) {
+                $db->rollback();
+            }
             $this->failure('Unable to delete user');
         }
     }

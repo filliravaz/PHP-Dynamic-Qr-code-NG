@@ -127,8 +127,7 @@ class Qrcode {
 
             $ctx = stream_context_create([
                 'http' => [
-                    'timeout' => 10,
-                    'ignore_errors' => true
+                    'timeout' => 10
                 ]
             ]);
             $content = @file_get_contents($url, false, $ctx);
@@ -209,7 +208,14 @@ class Qrcode {
     public function deleteQrcode($id, $async = false) {
         $db = getDbInstance();
 
-        $qrcode = $this->getQrcode($id);
+        $db->where('id', (int)$id);
+        $qrcode = $db->getOne($this->table);
+        if (!$qrcode) {
+            if (!$async) {
+                $this->failure('QR code not found.');
+            }
+            return;
+        }
 
         $db->where('id', $id);
         $status = $db->delete($this->table);
