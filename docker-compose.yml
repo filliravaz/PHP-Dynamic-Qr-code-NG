@@ -68,7 +68,8 @@ services:
     #       docker compose exec php-dynamic-qrcode-db rm -f /tmp/my.cnf
     #    e. Start the full application stack (pending migrations are applied automatically on boot):
     #       docker compose up -d
-    #       (Note: Running `php upgrade/upgrade.php` is only needed if migrating a legacy v1 database to assign unowned QR codes to a specific operator).
+    #       (Note: Automatic boot migration skips legacy v1 databases, so running `docker compose run --rm php-dynamic-qrcode php upgrade/upgrade.php`
+    #       is required for a v1 dump. Supplying an operator ID via DEFAULT_OPERATOR_ID is optional and only assigns unowned QR codes).
     #
     # Note: The application includes built-in database migration and auto-seeding (MigrationManager).
     # On first startup with an empty database, the app automatically seeds the schema and superadmin account.

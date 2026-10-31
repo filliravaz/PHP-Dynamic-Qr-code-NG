@@ -832,8 +832,15 @@ class MigrationManager {
                 $colRow = $idColCheck->fetch_assoc();
                 $isVarchar32 = (strtolower(trim($colRow['Type'] ?? '')) === 'varchar(32)');
                 $isNotNull = (strtoupper(trim($colRow['Null'] ?? '')) === 'NO');
+                $needsColumnModify = (!$isVarchar32 || !$isNotNull);
 
-                if (!$isVarchar32 || !$isNotNull) {
+                $idxCheck = $conn->query("SHOW INDEX FROM `{$dynTable}` WHERE Key_name = 'idx_identifier'");
+                $hasIndex = ($idxCheck && $idxCheck->num_rows > 0);
+                if ($idxCheck) {
+                    $idxCheck->close();
+                }
+
+                if (!$hasIndex || $needsColumnModify) {
                     $rowsRes = $conn->query("SELECT `id`, `identifier` FROM `{$dynTable}` ORDER BY `id` ASC");
                     $usedIdentifiers = [];
                     $recordsToFix = [];
@@ -885,18 +892,20 @@ class MigrationManager {
                         }
                     }
 
-                    self::executeQuery($conn, "ALTER TABLE `{$dynTable}` MODIFY `identifier` VARCHAR(32) NOT NULL", "Failed modifying identifier column to VARCHAR(32) NOT NULL");
-                    self::log($logger, "Modified identifier column in {$dynTable} to VARCHAR(32) NOT NULL.");
+                    if ($needsColumnModify) {
+                        self::executeQuery($conn, "ALTER TABLE `{$dynTable}` MODIFY `identifier` VARCHAR(32) NOT NULL", "Failed modifying identifier column to VARCHAR(32) NOT NULL");
+                        self::log($logger, "Modified identifier column in {$dynTable} to VARCHAR(32) NOT NULL.");
+                    }
+                }
+
+                if (!$hasIndex) {
+                    self::executeQuery($conn, "ALTER TABLE `{$dynTable}` ADD UNIQUE KEY `idx_identifier` (`identifier`)", "Failed adding idx_identifier index to {$dynTable}");
+                    self::log($logger, "Added unique index idx_identifier to {$dynTable}.");
                 }
             }
-            if ($idColCheck) $idColCheck->close();
-
-            $idxCheck = $conn->query("SHOW INDEX FROM `{$dynTable}` WHERE Key_name = 'idx_identifier'");
-            if ($idxCheck && $idxCheck->num_rows === 0) {
-                self::executeQuery($conn, "ALTER TABLE `{$dynTable}` ADD UNIQUE KEY `idx_identifier` (`identifier`)", "Failed adding idx_identifier index to {$dynTable}");
-                self::log($logger, "Added unique index idx_identifier to {$dynTable}.");
+            if ($idColCheck) {
+                $idColCheck->close();
             }
-            if ($idxCheck) $idxCheck->close();
         }
         if ($dynTableCheck) $dynTableCheck->close();
     }
