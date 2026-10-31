@@ -76,7 +76,10 @@ services:
     #    h. Start the full application stack:
     #       docker compose up -d
     #
-    # Fresh installations (no existing data) automatically use the mounted database initialization scripts below with the configured DATABASE_PREFIX.
+    # Note: The application now includes built-in database migration and auto-seeding (MigrationManager).
+    # On first startup with an empty database, the app automatically seeds the schema and superadmin account.
+    # On subsequent versions, schema changes are automatically migrated on application boot.
+    # Fresh installations can also optionally use the mounted database initialization scripts below with the configured DATABASE_PREFIX.
     # -------------------------------------------------------------------------
     image: "mariadb:11.4"
     restart: "unless-stopped"
