@@ -143,16 +143,29 @@ class MigrationManager {
                     }
 
                     // If not a legacy v1 database, verify all core tables and the baseline version exist.
-                    // If any core table is missing (e.g. interrupted initial seed), resume the idempotent seed under lock.
+                    // If any core table is missing or 2.0.0 baseline is unrecorded, repair missing tables and complete 2.0.0 baseline.
                     if (!self::hasAllCoreTables($conn, $prefix) || !self::hasVersionRecord($conn, $prefix, '2.0.0')) {
-                        self::log($logger, "Partially initialized database detected. Resuming seed to create remaining tables...");
-                        self::seedDatabase($conn, $prefix, $logger);
-                        self::$checkedInThisProcess = true;
-                    } else {
-                        // Run incremental migrations (2.0.1+, etc.)
-                        self::executePendingMigrations($conn, $prefix, $logger, $operatorId);
-                        self::$checkedInThisProcess = true;
+                        self::log($logger, "Partially initialized database detected. Recovering core schema...");
+
+                        $usersHadRows = self::usersTableHasRows($conn, $prefix);
+                        self::seedMissingCoreTables($conn, $prefix, $logger);
+
+                        if (!$usersHadRows && !self::usersTableHasRows($conn, $prefix)) {
+                            self::provisionDefaultSuperadmin($conn, $prefix, $logger);
+                        } else {
+                            self::log($logger, "Users table already contains rows; skipping default superadmin provisioning.");
+                        }
+
+                        if (!self::hasVersionRecord($conn, $prefix, '2.0.0')) {
+                            self::log($logger, "Completing migration 2.0.0 for baseline schema...");
+                            self::migration200($conn, $prefix, $logger, $operatorId);
+                            self::recordVersion($conn, $prefix, '2.0.0');
+                        }
                     }
+
+                    // Run incremental migrations (2.0.1+, etc.)
+                    self::executePendingMigrations($conn, $prefix, $logger, $operatorId);
+                    self::$checkedInThisProcess = true;
                 }
             } finally {
                 self::releaseLock($conn, $prefix);
@@ -387,11 +400,68 @@ class MigrationManager {
     }
 
     /**
-     * Seed initial database schema and default superadmin user.
+     * Check if the users table contains at least one row.
      */
-    public static function seedDatabase(\mysqli $conn, string $prefix, ?callable $logger = null): void {
-        self::log($logger, "Seeding initial schema and default data...");
+    public static function usersTableHasRows(\mysqli $conn, string $prefix): bool {
+        $usersTable = $prefix . 'users';
+        if (!self::tableExists($conn, $usersTable)) {
+            return false;
+        }
+        try {
+            $res = $conn->query("SELECT 1 FROM `{$usersTable}` LIMIT 1");
+            if ($res) {
+                $hasRows = ($res->num_rows > 0);
+                $res->close();
+                return $hasRows;
+            }
+        } catch (\Throwable $e) {
+            // Table doesn't exist or query failed
+        }
+        return false;
+    }
 
+    /**
+     * Record a schema version in the schema_version table.
+     */
+    public static function recordVersion(\mysqli $conn, string $prefix, string $version): void {
+        $verTable = $prefix . 'schema_version';
+        $insStmt = $conn->prepare("INSERT INTO `{$verTable}` (`version`, `applied_at`) VALUES (?, NOW()) ON DUPLICATE KEY UPDATE `applied_at` = NOW()");
+        if (!$insStmt) {
+            throw new \RuntimeException("Failed preparing schema_version record query: " . $conn->error);
+        }
+        $insStmt->bind_param('s', $version);
+        if (!$insStmt->execute()) {
+            $err = $insStmt->error;
+            $insStmt->close();
+            throw new \RuntimeException("Failed recording schema version {$version}: " . $err);
+        }
+        $insStmt->close();
+    }
+
+    /**
+     * Provision the default superadmin user account.
+     */
+    public static function provisionDefaultSuperadmin(\mysqli $conn, string $prefix, ?callable $logger = null): void {
+        $usersTable = $prefix . 'users';
+        $superadminHash = '$2y$10$xpZc5KC.aU2XHkcqhuZGFuAnqmtL4Unt8MysOyylceq.19XIyoZpG';
+        $stmt = $conn->prepare("INSERT INTO `{$usersTable}` (`id`, `username`, `password`, `series_id`, `remember_token`, `expires`, `type`, `must_change_password`, `session_version`) VALUES (1, 'superadmin', ?, NULL, NULL, NULL, 'super', 1, 1) ON DUPLICATE KEY UPDATE `id` = `id`");
+        if (!$stmt) {
+            throw new \RuntimeException("Failed preparing superadmin seed query: " . $conn->error);
+        }
+        $stmt->bind_param('s', $superadminHash);
+        if (!$stmt->execute()) {
+            $err = $stmt->error;
+            $stmt->close();
+            throw new \RuntimeException("Failed executing superadmin seed: " . $err);
+        }
+        $stmt->close();
+        self::log($logger, "Provisioned default superadmin account.");
+    }
+
+    /**
+     * Create any missing core application tables using CREATE TABLE IF NOT EXISTS.
+     */
+    public static function seedMissingCoreTables(\mysqli $conn, string $prefix, ?callable $logger = null): void {
         // 1. Users table
         $usersTable = $prefix . 'users';
         self::executeQuery($conn, "CREATE TABLE IF NOT EXISTS `{$usersTable}` (
@@ -407,20 +477,6 @@ class MigrationManager {
           PRIMARY KEY (`id`),
           UNIQUE KEY `username` (`username`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4", "Failed creating users table");
-
-        // Seed default superadmin account (password: superadmin, must change password)
-        $superadminHash = '$2y$10$xpZc5KC.aU2XHkcqhuZGFuAnqmtL4Unt8MysOyylceq.19XIyoZpG';
-        $stmt = $conn->prepare("INSERT INTO `{$usersTable}` (`id`, `username`, `password`, `series_id`, `remember_token`, `expires`, `type`, `must_change_password`, `session_version`) VALUES (1, 'superadmin', ?, NULL, NULL, NULL, 'super', 1, 1) ON DUPLICATE KEY UPDATE `id` = `id`");
-        if (!$stmt) {
-            throw new \RuntimeException("Failed preparing superadmin seed query: " . $conn->error);
-        }
-        $stmt->bind_param('s', $superadminHash);
-        if (!$stmt->execute()) {
-            $err = $stmt->error;
-            $stmt->close();
-            throw new \RuntimeException("Failed executing superadmin seed: " . $err);
-        }
-        $stmt->close();
 
         // 2. Dynamic QR table
         $dynTable = $prefix . 'dynamic_qrcodes';
@@ -486,23 +542,22 @@ class MigrationManager {
           `applied_at` datetime NOT NULL,
           PRIMARY KEY (`version`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4", "Failed creating schema_version table");
+    }
+
+    /**
+     * Seed initial database schema and default superadmin user.
+     */
+    public static function seedDatabase(\mysqli $conn, string $prefix, ?callable $logger = null): void {
+        self::log($logger, "Seeding initial schema and default data...");
+
+        self::seedMissingCoreTables($conn, $prefix, $logger);
+        self::provisionDefaultSuperadmin($conn, $prefix, $logger);
 
         // Mark all registered migrations as applied
         $migrations = self::getMigrations();
-        $insStmt = $conn->prepare("INSERT INTO `{$verTable}` (`version`, `applied_at`) VALUES (?, NOW()) ON DUPLICATE KEY UPDATE `applied_at` = NOW()");
-        if (!$insStmt) {
-            throw new \RuntimeException("Failed preparing schema_version insert: " . $conn->error);
-        }
-        $vName = '';
-        $insStmt->bind_param('s', $vName);
         foreach (array_keys($migrations) as $vName) {
-            if (!$insStmt->execute()) {
-                $err = $insStmt->error;
-                $insStmt->close();
-                throw new \RuntimeException("Failed recording schema version {$vName}: " . $err);
-            }
+            self::recordVersion($conn, $prefix, $vName);
         }
-        $insStmt->close();
 
         self::log($logger, "Database seeded successfully. Superadmin account provisioned.");
     }
@@ -551,17 +606,7 @@ class MigrationManager {
                 self::log($logger, "Running migration {$version}...");
                 call_user_func($callback, $conn, $prefix, $logger, $operatorId);
 
-                $insStmt = $conn->prepare("INSERT INTO `{$verTable}` (`version`, `applied_at`) VALUES (?, NOW()) ON DUPLICATE KEY UPDATE `applied_at` = NOW()");
-                if (!$insStmt) {
-                    throw new \RuntimeException("Failed preparing schema_version record query: " . $conn->error);
-                }
-                $insStmt->bind_param('s', $version);
-                if (!$insStmt->execute()) {
-                    $err = $insStmt->error;
-                    $insStmt->close();
-                    throw new \RuntimeException("Failed recording schema version {$version}: " . $err);
-                }
-                $insStmt->close();
+                self::recordVersion($conn, $prefix, $version);
                 self::log($logger, "Migration {$version} applied successfully.");
                 $executed++;
             }
