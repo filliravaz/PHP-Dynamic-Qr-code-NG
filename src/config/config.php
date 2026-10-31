@@ -44,6 +44,7 @@ else
     define('SCRIPT_FOLDER', "/" . SCRIPT_NAME);
 
 require_once BASE_PATH . '/lib/MysqliDb/MysqliDb.php';
+require_once BASE_PATH . '/lib/Database/MigrationManager.php';
 
 /* SAVED QR CODES */
 //You can change the folder where the qr code will be saved
@@ -71,6 +72,9 @@ function getDbInstance() {
         if (function_exists('mysqli_report')) {
             mysqli_report(MYSQLI_REPORT_OFF);
         }
+
+        MigrationManager::ensureMigrated();
+
         $instance = new MysqliDb (Array (
             'host' => DATABASE_HOST,
             'username' => DATABASE_USER,

@@ -60,7 +60,7 @@ LIVE DEMO CURRENTLY NOT AVAILABLE - Will be added once this fork reaches a "stab
 ## Setup with docker compose
 
 ### Option A: Run using published Docker image
-1. Download `docker-compose.yml`, `database/init.sql`, and `database/init.sh`.
+1. Download `docker-compose.yml` (database initialization and migrations are handled automatically by the application).
 2. Start the stack (pulls prebuilt image `ghcr.io/filliravaz/php-dynamic-qr-code-ng:latest`):
 ```bash
 docker compose up -d
