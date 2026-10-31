@@ -73,16 +73,27 @@ function getDbInstance() {
             mysqli_report(MYSQLI_REPORT_OFF);
         }
 
-        MigrationManager::ensureMigrated();
+        $maxRetries = 3;
+        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+            try {
+                $instance = new MysqliDb (Array (
+                    'host' => DATABASE_HOST,
+                    'username' => DATABASE_USER,
+                    'password' => DATABASE_PASSWORD,
+                    'db'=> DATABASE_NAME,
+                    'port' => DATABASE_PORT,
+                    'prefix' => DATABASE_PREFIX,
+                    'charset' => DATABASE_CHARSET));
+                break;
+            } catch (\Throwable $e) {
+                if ($attempt === $maxRetries) {
+                    throw $e;
+                }
+                sleep(1);
+            }
+        }
 
-        $instance = new MysqliDb (Array (
-            'host' => DATABASE_HOST,
-            'username' => DATABASE_USER,
-            'password' => DATABASE_PASSWORD,
-            'db'=> DATABASE_NAME,
-            'port' => DATABASE_PORT,
-            'prefix' => DATABASE_PREFIX,
-            'charset' => DATABASE_CHARSET));
+        MigrationManager::ensureMigrated($instance->mysqli());
     }
     return $instance;
 }

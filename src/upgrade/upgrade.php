@@ -239,7 +239,11 @@ $logger = function($message) use ($isCli) {
 };
 
 // Execute all pending migrations via MigrationManager
-MigrationManager::runMigrations($conn, (string)DATABASE_PREFIX, $logger, $operatorId);
+try {
+    MigrationManager::runMigrations($conn, (string)DATABASE_PREFIX, $logger, $operatorId);
+} catch (\Throwable $e) {
+    abortMigration($conn, $e->getMessage(), $isCli);
+}
 
 outputMessage("<strong>Upgrade completed successfully! Database is now at schema version " . TARGET_VERSION . ".</strong>", $isCli);
 

@@ -37,14 +37,38 @@ class MigrationManager {
     }
 
     /**
+     * Acquire database advisory lock.
+     */
+    public static function acquireLock(\mysqli $conn, string $prefix, int $timeout = 30): bool {
+        $lockName = 'migration_lock_' . md5(DATABASE_NAME . '_' . $prefix);
+        $res = $conn->query("SELECT GET_LOCK('{$lockName}', {$timeout}) AS `acquired`");
+        if ($res) {
+            $row = $res->fetch_assoc();
+            $acquired = ((int)($row['acquired'] ?? 0) === 1);
+            $res->close();
+            return $acquired;
+        }
+        return false;
+    }
+
+    /**
+     * Release database advisory lock.
+     */
+    public static function releaseLock(\mysqli $conn, string $prefix): void {
+        $lockName = 'migration_lock_' . md5(DATABASE_NAME . '_' . $prefix);
+        $conn->query("SELECT RELEASE_LOCK('{$lockName}')");
+    }
+
+    /**
      * Ensure the database schema is initialized and all migrations are applied.
      * Safe to call on every request; uses an indexed query and in-process caching.
      *
+     * @param \mysqli|null $conn Optional active database connection (e.g. from MysqliDb).
      * @param callable|null $logger Optional logging callback: function(string $message): void
      * @param int|null $operatorId Optional default operator ID for unassigned records during v1 migration
      * @return void
      */
-    public static function ensureMigrated(?callable $logger = null, ?int $operatorId = null): void {
+    public static function ensureMigrated(?\mysqli $conn = null, ?callable $logger = null, ?int $operatorId = null): void {
         if (self::$checkedInThisProcess) {
             return;
         }
@@ -52,7 +76,12 @@ class MigrationManager {
         $prefix = defined('DATABASE_PREFIX') ? (string)DATABASE_PREFIX : '';
         $latestVersion = self::getLatestVersion();
 
-        $conn = self::createConnection();
+        $shouldClose = false;
+        if ($conn === null) {
+            $conn = self::createConnection();
+            $shouldClose = true;
+        }
+
         if (!$conn) {
             self::log($logger, "Warning: Unable to establish database connection for migration check.");
             return;
@@ -77,13 +106,10 @@ class MigrationManager {
             }
 
             // Lock to avoid race conditions when multiple workers start simultaneously
-            $lockName = 'migration_lock_' . md5(DATABASE_NAME . '_' . $prefix);
-            $lockAcquired = false;
-            $lockRes = $conn->query("SELECT GET_LOCK('{$lockName}', 30) AS `acquired`");
-            if ($lockRes) {
-                $row = $lockRes->fetch_assoc();
-                $lockAcquired = ((int)($row['acquired'] ?? 0) === 1);
-                $lockRes->close();
+            $lockAcquired = self::acquireLock($conn, $prefix, 30);
+            if (!$lockAcquired) {
+                self::log($logger, "Warning: Unable to acquire database migration lock (timed out or query failed). Will retry on subsequent request.");
+                return;
             }
 
             try {
@@ -105,22 +131,50 @@ class MigrationManager {
                 // Check if database is empty
                 if (self::isDatabaseEmpty($conn, $prefix)) {
                     self::seedDatabase($conn, $prefix, $logger);
+                    self::$checkedInThisProcess = true;
                 } else {
-                    self::runMigrations($conn, $prefix, $logger, $operatorId);
-                }
+                    // Check if legacy v1 database (needs 2.0.0 migration)
+                    if (self::isLegacyV1Database($conn, $prefix)) {
+                        self::log($logger, "Notice: Legacy v1 database detected. Automatic migration to 2.0.0 skipped; please run 'php upgrade/upgrade.php' (or 'docker compose run --rm php-dynamic-qrcode php upgrade/upgrade.php') to complete upgrade and assign QR code ownership.");
+                        error_log("Notice: Legacy v1 database detected. Automatic migration to 2.0.0 skipped; please run 'php upgrade/upgrade.php' to complete upgrade and assign QR code ownership.");
+                        return;
+                    }
 
-                self::$checkedInThisProcess = true;
-            } finally {
-                if ($lockAcquired) {
-                    $conn->query("SELECT RELEASE_LOCK('{$lockName}')");
+                    // Run incremental migrations (2.0.1+, etc.)
+                    self::executePendingMigrations($conn, $prefix, $logger, $operatorId);
+                    self::$checkedInThisProcess = true;
                 }
+            } finally {
+                self::releaseLock($conn, $prefix);
             }
         } catch (\Throwable $e) {
             self::log($logger, "Database migration/seed error: " . $e->getMessage());
             error_log("Database migration/seed error: " . $e->getMessage());
         } finally {
-            $conn->close();
+            if ($shouldClose) {
+                $conn->close();
+            }
         }
+    }
+
+    /**
+     * Check if an existing database is a legacy v1 database (migration 2.0.0 not applied).
+     */
+    public static function isLegacyV1Database(\mysqli $conn, string $prefix): bool {
+        $verTable = $prefix . 'schema_version';
+        try {
+            $res = $conn->query("SELECT 1 FROM `{$verTable}` WHERE `version` = '2.0.0' LIMIT 1");
+            if ($res && $res->num_rows > 0) {
+                $res->close();
+                return false;
+            }
+            if ($res) {
+                $res->close();
+            }
+        } catch (\Throwable $e) {
+            // Table does not exist
+        }
+        return true;
     }
 
     /**
@@ -320,9 +374,25 @@ class MigrationManager {
     }
 
     /**
-     * Run all unapplied migrations in chronological sequence.
+     * Run all unapplied migrations under database-wide advisory lock.
      */
     public static function runMigrations(\mysqli $conn, string $prefix, ?callable $logger = null, ?int $operatorId = null): void {
+        $lockAcquired = self::acquireLock($conn, $prefix, 30);
+        if (!$lockAcquired) {
+            throw new \RuntimeException("Unable to acquire database migration lock (timed out or query failed).");
+        }
+
+        try {
+            self::executePendingMigrations($conn, $prefix, $logger, $operatorId);
+        } finally {
+            self::releaseLock($conn, $prefix);
+        }
+    }
+
+    /**
+     * Execute unapplied migrations in chronological sequence.
+     */
+    private static function executePendingMigrations(\mysqli $conn, string $prefix, ?callable $logger = null, ?int $operatorId = null): void {
         $verTable = $prefix . 'schema_version';
         self::executeQuery($conn, "CREATE TABLE IF NOT EXISTS `{$verTable}` (
           `version` varchar(20) NOT NULL,
@@ -387,8 +457,18 @@ class MigrationManager {
                 $bCheck = $conn->query("SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $conn->real_escape_string($backupName) . "' LIMIT 1");
                 if (!$bCheck || $bCheck->num_rows === 0) {
                     if ($conn->query("CREATE TABLE `{$backupName}` LIKE `{$tName}`") === TRUE) {
-                        $conn->query("INSERT INTO `{$backupName}` SELECT * FROM `{$tName}`");
-                        self::log($logger, "Created backup snapshot: {$backupName}");
+                        $copyRes = $conn->query("INSERT INTO `{$backupName}` SELECT * FROM `{$tName}`");
+                        if ($copyRes === TRUE) {
+                            self::log($logger, "Created backup snapshot: {$backupName}");
+                        } else {
+                            $copyErr = $conn->error;
+                            try {
+                                $conn->query("DROP TABLE IF EXISTS `{$backupName}`");
+                            } catch (\Throwable $dropEx) {}
+                            throw new \RuntimeException("Failed to copy rows into snapshot table `{$backupName}`: " . $copyErr);
+                        }
+                    } else {
+                        throw new \RuntimeException("Failed to create snapshot table `{$backupName}`: " . $conn->error);
                     }
                 }
                 if ($bCheck) $bCheck->close();
