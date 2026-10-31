@@ -135,16 +135,24 @@ class MigrationManager {
                     self::seedDatabase($conn, $prefix, $logger);
                     self::$checkedInThisProcess = true;
                 } else {
-                    // Check if legacy v1 database (needs 2.0.0 migration)
+                    // Check if genuine legacy v1 database (needs 2.0.0 migration with operator assignment)
                     if (self::isLegacyV1Database($conn, $prefix)) {
                         self::log($logger, "Notice: Legacy v1 database detected. Automatic migration to 2.0.0 skipped; please run 'php upgrade/upgrade.php' (or 'docker compose run --rm php-dynamic-qrcode php upgrade/upgrade.php') to complete upgrade and assign QR code ownership.");
                         error_log("Notice: Legacy v1 database detected. Automatic migration to 2.0.0 skipped; please run 'php upgrade/upgrade.php' to complete upgrade and assign QR code ownership.");
                         return;
                     }
 
-                    // Run incremental migrations (2.0.1+, etc.)
-                    self::executePendingMigrations($conn, $prefix, $logger, $operatorId);
-                    self::$checkedInThisProcess = true;
+                    // If not a legacy v1 database, verify all core tables and the baseline version exist.
+                    // If any core table is missing (e.g. interrupted initial seed), resume the idempotent seed under lock.
+                    if (!self::hasAllCoreTables($conn, $prefix) || !self::hasVersionRecord($conn, $prefix, '2.0.0')) {
+                        self::log($logger, "Partially initialized database detected. Resuming seed to create remaining tables...");
+                        self::seedDatabase($conn, $prefix, $logger);
+                        self::$checkedInThisProcess = true;
+                    } else {
+                        // Run incremental migrations (2.0.1+, etc.)
+                        self::executePendingMigrations($conn, $prefix, $logger, $operatorId);
+                        self::$checkedInThisProcess = true;
+                    }
                 }
             } finally {
                 self::releaseLock($conn, $prefix);
@@ -161,15 +169,58 @@ class MigrationManager {
     }
 
     /**
-     * Check if an existing database is a legacy v1 database (migration 2.0.0 not applied).
+     * Check if an existing database is a genuine legacy v1 database.
+     * A genuine v1 database has legacy v1 structures (admin_accounts table,
+     * legacy column names user_name/admin_type, or dynamic/static tables without id_owner).
      */
     public static function isLegacyV1Database(\mysqli $conn, string $prefix): bool {
+        // If 2.0.0 is already recorded, it is definitely not an unmigrated v1 database
+        if (self::hasVersionRecord($conn, $prefix, '2.0.0')) {
+            return false;
+        }
+
+        // 1. If admin_accounts table exists, it is definitively a legacy v1 database
+        $adminTable = $prefix . 'admin_accounts';
+        if (self::tableExists($conn, $adminTable)) {
+            return true;
+        }
+
+        // 2. If users table exists, check for legacy v1 column names or missing v2 columns
+        $usersTable = $prefix . 'users';
+        if (self::tableExists($conn, $usersTable)) {
+            if (self::columnExists($conn, $usersTable, 'user_name') || self::columnExists($conn, $usersTable, 'admin_type')) {
+                return true;
+            }
+            if (!self::columnExists($conn, $usersTable, 'session_version')) {
+                return true;
+            }
+        }
+
+        // 3. If dynamic_qrcodes exists, check if it lacks id_owner
+        $dynTable = $prefix . 'dynamic_qrcodes';
+        if (self::tableExists($conn, $dynTable) && !self::columnExists($conn, $dynTable, 'id_owner')) {
+            return true;
+        }
+
+        // 4. If static_qrcodes exists, check if it lacks id_owner
+        $statTable = $prefix . 'static_qrcodes';
+        if (self::tableExists($conn, $statTable) && !self::columnExists($conn, $statTable, 'id_owner')) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if a specific version is recorded in schema_version table.
+     */
+    public static function hasVersionRecord(\mysqli $conn, string $prefix, string $version): bool {
         $verTable = $prefix . 'schema_version';
         try {
-            $res = $conn->query("SELECT 1 FROM `{$verTable}` WHERE `version` = '2.0.0' LIMIT 1");
+            $res = $conn->query("SELECT 1 FROM `{$verTable}` WHERE `version` = '" . $conn->real_escape_string($version) . "' LIMIT 1");
             if ($res && $res->num_rows > 0) {
                 $res->close();
-                return false;
+                return true;
             }
             if ($res) {
                 $res->close();
@@ -177,7 +228,87 @@ class MigrationManager {
         } catch (\Throwable $e) {
             // Table does not exist
         }
+        return false;
+    }
+
+    /**
+     * Verify whether all core application tables exist in the database.
+     */
+    public static function hasAllCoreTables(\mysqli $conn, string $prefix): bool {
+        $requiredTables = [
+            $prefix . 'users',
+            $prefix . 'dynamic_qrcodes',
+            $prefix . 'static_qrcodes',
+            $prefix . 'login_attempts',
+            $prefix . 'schema_version'
+        ];
+
+        $escaped = array_map(function($t) use ($conn) {
+            return "'" . $conn->real_escape_string($t) . "'";
+        }, $requiredTables);
+
+        $sql = "SELECT COUNT(*) AS `cnt` FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN (" . implode(',', $escaped) . ")";
+        $res = $conn->query($sql);
+        if ($res !== false) {
+            $row = $res->fetch_assoc();
+            $cnt = (int)($row['cnt'] ?? 0);
+            $res->close();
+            return $cnt === count($requiredTables);
+        }
+
+        foreach ($requiredTables as $table) {
+            if (!self::tableExists($conn, $table)) {
+                return false;
+            }
+        }
         return true;
+    }
+
+    /**
+     * Check if a specific table exists in the current database.
+     */
+    public static function tableExists(\mysqli $conn, string $tableName): bool {
+        $sql = "SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $conn->real_escape_string($tableName) . "' LIMIT 1";
+        $res = $conn->query($sql);
+        if ($res !== false) {
+            $exists = ($res->num_rows > 0);
+            $res->close();
+            return $exists;
+        }
+
+        $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $tableName);
+        $check = $conn->query("SHOW TABLES LIKE '" . $conn->real_escape_string($escaped) . "'");
+        if ($check && $check->num_rows > 0) {
+            $check->close();
+            return true;
+        }
+        if ($check) {
+            $check->close();
+        }
+        return false;
+    }
+
+    /**
+     * Check if a specific column exists in a given table.
+     */
+    public static function columnExists(\mysqli $conn, string $tableName, string $columnName): bool {
+        $sql = "SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $conn->real_escape_string($tableName) . "' AND COLUMN_NAME = '" . $conn->real_escape_string($columnName) . "' LIMIT 1";
+        $res = $conn->query($sql);
+        if ($res !== false) {
+            $exists = ($res->num_rows > 0);
+            $res->close();
+            return $exists;
+        }
+
+        $check = $conn->query("SHOW COLUMNS FROM `{$tableName}` LIKE '" . $conn->real_escape_string($columnName) . "'");
+        if ($check && $check->num_rows > 0) {
+            $check->close();
+            return true;
+        }
+        if ($check) {
+            $check->close();
+        }
+        return false;
     }
 
     /**
@@ -259,7 +390,7 @@ class MigrationManager {
      * Seed initial database schema and default superadmin user.
      */
     public static function seedDatabase(\mysqli $conn, string $prefix, ?callable $logger = null): void {
-        self::log($logger, "Database is empty. Seeding initial schema and default data...");
+        self::log($logger, "Seeding initial schema and default data...");
 
         // 1. Users table
         $usersTable = $prefix . 'users';
