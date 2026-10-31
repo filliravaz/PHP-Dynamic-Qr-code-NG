@@ -149,6 +149,7 @@ class MigrationManager {
 
                         $usersHadRows = self::usersTableHasRows($conn, $prefix);
                         self::seedMissingCoreTables($conn, $prefix, $logger);
+                        self::repairUsersSchema($conn, $prefix, $logger);
 
                         if (!$usersHadRows && !self::usersTableHasRows($conn, $prefix)) {
                             self::provisionDefaultSuperadmin($conn, $prefix, $logger);
@@ -439,6 +440,44 @@ class MigrationManager {
     }
 
     /**
+     * Repair the users table schema so all required columns exist.
+     */
+    public static function repairUsersSchema(\mysqli $conn, string $prefix, ?callable $logger = null): void {
+        $usersTable = $prefix . 'users';
+        if (!self::tableExists($conn, $usersTable)) {
+            return;
+        }
+
+        $colCheck = $conn->query("SHOW COLUMNS FROM `{$usersTable}` LIKE 'user_name'");
+        if ($colCheck && $colCheck->num_rows > 0) {
+            self::executeQuery($conn, "ALTER TABLE `{$usersTable}` CHANGE `user_name` `username` VARCHAR(50) NOT NULL", "Failed renaming user_name to username in {$usersTable}");
+            self::log($logger, "Renamed column user_name to username in {$usersTable}.");
+        }
+        if ($colCheck) $colCheck->close();
+
+        $typeCheck = $conn->query("SHOW COLUMNS FROM `{$usersTable}` LIKE 'admin_type'");
+        if ($typeCheck && $typeCheck->num_rows > 0) {
+            self::executeQuery($conn, "ALTER TABLE `{$usersTable}` CHANGE `admin_type` `type` VARCHAR(10) NOT NULL", "Failed renaming admin_type to type in {$usersTable}");
+            self::log($logger, "Renamed column admin_type to type in {$usersTable}.");
+        }
+        if ($typeCheck) $typeCheck->close();
+
+        $mcpCheck = $conn->query("SHOW COLUMNS FROM `{$usersTable}` LIKE 'must_change_password'");
+        if ($mcpCheck && $mcpCheck->num_rows === 0) {
+            self::executeQuery($conn, "ALTER TABLE `{$usersTable}` ADD `must_change_password` TINYINT(1) NOT NULL DEFAULT 0 AFTER `type`", "Failed adding must_change_password to {$usersTable}");
+            self::log($logger, "Added must_change_password column to {$usersTable}.");
+        }
+        if ($mcpCheck) $mcpCheck->close();
+
+        $svCheck = $conn->query("SHOW COLUMNS FROM `{$usersTable}` LIKE 'session_version'");
+        if ($svCheck && $svCheck->num_rows === 0) {
+            self::executeQuery($conn, "ALTER TABLE `{$usersTable}` ADD `session_version` INT(11) NOT NULL DEFAULT 1 AFTER `must_change_password`", "Failed adding session_version to {$usersTable}");
+            self::log($logger, "Added session_version column to {$usersTable}.");
+        }
+        if ($svCheck) $svCheck->close();
+    }
+
+    /**
      * Provision the default superadmin user account.
      */
     public static function provisionDefaultSuperadmin(\mysqli $conn, string $prefix, ?callable $logger = null): void {
@@ -673,33 +712,7 @@ class MigrationManager {
 
         // 3. User table columns update
         if ($hasUsers) {
-            $colCheck = $conn->query("SHOW COLUMNS FROM `{$usersTable}` LIKE 'user_name'");
-            if ($colCheck && $colCheck->num_rows > 0) {
-                self::executeQuery($conn, "ALTER TABLE `{$usersTable}` CHANGE `user_name` `username` VARCHAR(50) NOT NULL", "Failed renaming user_name to username in {$usersTable}");
-                self::log($logger, "Renamed column user_name to username in {$usersTable}.");
-            }
-            if ($colCheck) $colCheck->close();
-
-            $typeCheck = $conn->query("SHOW COLUMNS FROM `{$usersTable}` LIKE 'admin_type'");
-            if ($typeCheck && $typeCheck->num_rows > 0) {
-                self::executeQuery($conn, "ALTER TABLE `{$usersTable}` CHANGE `admin_type` `type` VARCHAR(10) NOT NULL", "Failed renaming admin_type to type in {$usersTable}");
-                self::log($logger, "Renamed column admin_type to type in {$usersTable}.");
-            }
-            if ($typeCheck) $typeCheck->close();
-
-            $mcpCheck = $conn->query("SHOW COLUMNS FROM `{$usersTable}` LIKE 'must_change_password'");
-            if ($mcpCheck && $mcpCheck->num_rows === 0) {
-                self::executeQuery($conn, "ALTER TABLE `{$usersTable}` ADD `must_change_password` TINYINT(1) NOT NULL DEFAULT 0 AFTER `type`", "Failed adding must_change_password to {$usersTable}");
-                self::log($logger, "Added must_change_password column to {$usersTable}.");
-            }
-            if ($mcpCheck) $mcpCheck->close();
-
-            $svCheck = $conn->query("SHOW COLUMNS FROM `{$usersTable}` LIKE 'session_version'");
-            if ($svCheck && $svCheck->num_rows === 0) {
-                self::executeQuery($conn, "ALTER TABLE `{$usersTable}` ADD `session_version` INT(11) NOT NULL DEFAULT 1 AFTER `must_change_password`", "Failed adding session_version to {$usersTable}");
-                self::log($logger, "Added session_version column to {$usersTable}.");
-            }
-            if ($svCheck) $svCheck->close();
+            self::repairUsersSchema($conn, $prefix, $logger);
         }
 
         // 4. Add id_owner column to dynamic_qrcodes
