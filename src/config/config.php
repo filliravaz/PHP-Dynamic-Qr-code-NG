@@ -73,10 +73,13 @@ function getDbInstance() {
             mysqli_report(MYSQLI_REPORT_OFF);
         }
 
+        $candidate = null;
+        $mysqli = null;
         $maxRetries = 3;
+
         for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
             try {
-                $instance = new MysqliDb (Array (
+                $candidate = new MysqliDb (Array (
                     'host' => DATABASE_HOST,
                     'username' => DATABASE_USER,
                     'password' => DATABASE_PASSWORD,
@@ -84,8 +87,12 @@ function getDbInstance() {
                     'port' => DATABASE_PORT,
                     'prefix' => DATABASE_PREFIX,
                     'charset' => DATABASE_CHARSET));
+
+                $mysqli = $candidate->mysqli();
                 break;
             } catch (\Throwable $e) {
+                $candidate = null;
+                $mysqli = null;
                 if ($attempt === $maxRetries) {
                     throw $e;
                 }
@@ -93,7 +100,8 @@ function getDbInstance() {
             }
         }
 
-        MigrationManager::ensureMigrated($instance->mysqli());
+        MigrationManager::ensureMigrated($mysqli);
+        $instance = $candidate;
     }
     return $instance;
 }

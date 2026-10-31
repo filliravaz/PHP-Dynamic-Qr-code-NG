@@ -83,8 +83,9 @@ class MigrationManager {
         }
 
         if (!$conn) {
-            self::log($logger, "Warning: Unable to establish database connection for migration check.");
-            return;
+            $msg = "Unable to establish database connection for migration check.";
+            self::log($logger, "Warning: " . $msg);
+            throw new \RuntimeException($msg);
         }
 
         try {
@@ -108,8 +109,9 @@ class MigrationManager {
             // Lock to avoid race conditions when multiple workers start simultaneously
             $lockAcquired = self::acquireLock($conn, $prefix, 30);
             if (!$lockAcquired) {
-                self::log($logger, "Warning: Unable to acquire database migration lock (timed out or query failed). Will retry on subsequent request.");
-                return;
+                $msg = "Unable to acquire database migration lock (timed out or query failed).";
+                self::log($logger, "Warning: " . $msg);
+                throw new \RuntimeException($msg);
             }
 
             try {
@@ -150,8 +152,9 @@ class MigrationManager {
         } catch (\Throwable $e) {
             self::log($logger, "Database migration/seed error: " . $e->getMessage());
             error_log("Database migration/seed error: " . $e->getMessage());
+            throw $e;
         } finally {
-            if ($shouldClose) {
+            if ($shouldClose && $conn) {
                 $conn->close();
             }
         }
