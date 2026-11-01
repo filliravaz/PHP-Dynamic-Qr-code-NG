@@ -44,6 +44,7 @@ else
     define('SCRIPT_FOLDER', "/" . SCRIPT_NAME);
 
 require_once BASE_PATH . '/lib/MysqliDb/MysqliDb.php';
+require_once BASE_PATH . '/lib/Database/MigrationManager.php';
 
 /* SAVED QR CODES */
 //You can change the folder where the qr code will be saved
@@ -71,14 +72,36 @@ function getDbInstance() {
         if (function_exists('mysqli_report')) {
             mysqli_report(MYSQLI_REPORT_OFF);
         }
-        $instance = new MysqliDb (Array (
-            'host' => DATABASE_HOST,
-            'username' => DATABASE_USER,
-            'password' => DATABASE_PASSWORD,
-            'db'=> DATABASE_NAME,
-            'port' => DATABASE_PORT,
-            'prefix' => DATABASE_PREFIX,
-            'charset' => DATABASE_CHARSET));
+
+        $candidate = null;
+        $mysqli = null;
+        $maxRetries = 3;
+
+        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+            try {
+                $candidate = new MysqliDb (Array (
+                    'host' => DATABASE_HOST,
+                    'username' => DATABASE_USER,
+                    'password' => DATABASE_PASSWORD,
+                    'db'=> DATABASE_NAME,
+                    'port' => DATABASE_PORT,
+                    'prefix' => DATABASE_PREFIX,
+                    'charset' => DATABASE_CHARSET));
+
+                $mysqli = $candidate->mysqli();
+                break;
+            } catch (\Throwable $e) {
+                $candidate = null;
+                $mysqli = null;
+                if ($attempt === $maxRetries) {
+                    throw $e;
+                }
+                sleep(1);
+            }
+        }
+
+        MigrationManager::ensureMigrated($mysqli);
+        $instance = $candidate;
     }
     return $instance;
 }
