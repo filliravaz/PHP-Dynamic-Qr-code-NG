@@ -28,6 +28,35 @@ function getSecureRandomToken($bytes = 16) {
 }
 
 /**
+ * Validate a dynamic QR code redirect target.
+ *
+ * Only absolute http/https URLs with a host are accepted. URLs carrying userinfo
+ * (e.g. "https://trusted.example@evil.example/") are rejected because browsers drop
+ * the userinfo and navigate to the real host, which makes the link look deceptive.
+ */
+function isSafeRedirectUrl($url): bool {
+	if (!is_string($url)) {
+		return false;
+	}
+	$url = trim($url);
+	if ($url === '' || !preg_match('/^https?:\/\//i', $url) || !filter_var($url, FILTER_VALIDATE_URL)) {
+		return false;
+	}
+	// Reject control characters / whitespace and backslashes that browsers may normalise differently.
+	if (preg_match('/[\x00-\x20\x7f\\\\]/', $url)) {
+		return false;
+	}
+	$parts = parse_url($url);
+	if ($parts === false || empty($parts['host'])) {
+		return false;
+	}
+	if (isset($parts['user']) || isset($parts['pass'])) {
+		return false;
+	}
+	return true;
+}
+
+/**
  * Regenerate CSRF token in session
  */
 function regenerateCsrfToken() {
@@ -530,8 +559,14 @@ function renderSafeStaticContent($rawContent) {
 
     $dom = new DOMDocument();
     libxml_use_internal_errors(true);
+    // Defense in depth: drop markup declarations (<!DOCTYPE, <!ENTITY, <![CDATA[ ...)
+    // and processing instructions from user content before it reaches libxml2.
+    $content = preg_replace('/<![^>]*>|<\?.*?(\?>|$)/s', '', (string)$rawContent);
+    if ($content === null) {
+        return htmlspecialchars((string)$rawContent, ENT_QUOTES, 'UTF-8');
+    }
     // Wrap in standard root node and load HTML
-    $dom->loadHTML('<?xml encoding="utf-8"?><div>' . (string)$rawContent . '</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+    $dom->loadHTML('<?xml encoding="utf-8"?><div>' . $content . '</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD | LIBXML_NONET);
     libxml_clear_errors();
 
     $allowedTags = ['strong', 'b', 'br', 'div', 'span', 'p'];

@@ -68,8 +68,8 @@ class DynamicQrcode {
         }
 
         $rawLink = trim($input_data['link'] ?? '');
-        if (!preg_match('/^https?:\/\//i', $rawLink) || !filter_var($rawLink, FILTER_VALIDATE_URL)) {
-            $this->failure("Invalid target URL. Only HTTP and HTTPS URLs are allowed.");
+        if (!isSafeRedirectUrl($rawLink)) {
+            $this->failure("Invalid target URL. Only HTTP and HTTPS URLs without embedded credentials are allowed.");
         }
 
         $data_to_db['filename'] = $this->qrcode_instance->sanitizeFilename($input_data['filename']);
@@ -103,8 +103,8 @@ class DynamicQrcode {
         }
 
         $rawLink = trim($input_data['link'] ?? '');
-        if (!preg_match('/^https?:\/\//i', $rawLink) || !filter_var($rawLink, FILTER_VALIDATE_URL)) {
-            $this->failure("Invalid target URL. Only HTTP and HTTPS URLs are allowed.");
+        if (!isSafeRedirectUrl($rawLink)) {
+            $this->failure("Invalid target URL. Only HTTP and HTTPS URLs without embedded credentials are allowed.");
         }
 
         $data_to_db['filename'] = $this->qrcode_instance->sanitizeFilename($input_data['filename']);
