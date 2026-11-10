@@ -209,6 +209,58 @@ class Qrcode {
                         return false;
                     }
                 }
+
+                // Additionally parse the XML to inspect actual elements and attributes
+                if (class_exists('DOMDocument')) {
+                    $prevErrors = libxml_use_internal_errors(true);
+                    try {
+                        $dom = new DOMDocument();
+                        if (!$dom->loadXML($content, LIBXML_NONET | LIBXML_NOWARNING | LIBXML_NOERROR)) {
+                            return false;
+                        }
+
+                        $root = $dom->documentElement;
+                        if (!$root || strtolower($root->localName ?: $root->nodeName) !== 'svg') {
+                            return false;
+                        }
+
+                        $forbiddenElements = [
+                            'script', 'foreignobject', 'iframe', 'object', 'embed',
+                            'use', 'image', 'a', 'animate', 'set', 'handler', 'listener'
+                        ];
+
+                        foreach ($dom->getElementsByTagName('*') as $el) {
+                            $elName = strtolower($el->localName ?: $el->nodeName);
+                            if (in_array($elName, $forbiddenElements, true)) {
+                                return false;
+                            }
+
+                            if ($el->hasAttributes()) {
+                                foreach ($el->attributes as $attr) {
+                                    $attrLocal = strtolower($attr->localName ?: $attr->nodeName);
+                                    $attrNode = strtolower($attr->nodeName);
+
+                                    if (str_starts_with($attrLocal, 'on') || str_starts_with($attrNode, 'on')) {
+                                        return false;
+                                    }
+
+                                    if (in_array($attrLocal, ['href', 'src'], true) || in_array($attrNode, ['href', 'src', 'xlink:href'], true)) {
+                                        return false;
+                                    }
+
+                                    $val = preg_replace('/[\x00-\x20\s]+/', '', strtolower(html_entity_decode($attr->value, ENT_QUOTES | ENT_HTML5, 'UTF-8')));
+                                    if (str_contains($val, 'javascript:') || str_contains($val, 'data:')) {
+                                        return false;
+                                    }
+                                }
+                            }
+                        }
+                    } finally {
+                        libxml_clear_errors();
+                        libxml_use_internal_errors($prevErrors);
+                    }
+                }
+
                 return true;
             default:
                 return false;
