@@ -87,7 +87,7 @@ RUN chown -R root:root /var/www/html \
 # Run as an unprivileged user. Non-root processes cannot bind to ports < 1024,
 # so Apache listens on 8080 inside the container (map it with e.g. "80:8080").
 RUN sed -ri -e 's!^Listen 80$!Listen 8080!' /etc/apache2/ports.conf \
-    && sed -ri -e 's!<VirtualHost \\*:80>!<VirtualHost *:8080>!' /etc/apache2/sites-available/000-default.conf \
+    && sed -ri -e 's!<VirtualHost \*:80>!<VirtualHost *:8080>!' /etc/apache2/sites-available/000-default.conf \
     && mkdir -p /var/run/apache2 /var/lock/apache2 /var/log/apache2 \
     && chown -R www-data:www-data /var/run/apache2 /var/lock/apache2 /var/log/apache2
 
