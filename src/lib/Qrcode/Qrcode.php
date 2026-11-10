@@ -112,6 +112,10 @@ class Qrcode {
 
         $filename = $this->getSafeFilePath($data_to_db['filename'], $data_to_db['format']);
 
+        // Define explicitly so the flow below never depends on failure() exiting.
+        $last_id = false;
+        $db = null;
+
         if(!file_exists($filename)){
             $queryParams = [
                 'data' => urldecode($data_to_qrcode),
@@ -134,6 +138,12 @@ class Qrcode {
             if ($content === false) {
                 $this->failure("Failed to retrieve QR code from external service.");
             }
+
+            // Never persist an unvalidated third-party response under saved_qrcode/.
+            if (!$this->isValidExternalImage($content, $data_to_db['format'])) {
+                error_log('External QR service returned unexpected content for format ' . $data_to_db['format']);
+                $this->failure("External QR service returned an invalid image.");
+            }
         
             try{
                 file_put_contents($filename, $content);
@@ -155,8 +165,53 @@ class Qrcode {
             $this->success('Qr code added successfully!');
         }
         else {
-            error_log('Insert failed: ' . $db->getLastError());
+            error_log('Insert failed: ' . ($db !== null ? $db->getLastError() : 'no database handle'));
             $this->failure('Failed to create QR code.');
+        }
+    }
+
+    /**
+     * Validate that a response from the external QR API matches the requested format.
+     * Raster/EPS formats are checked by magic bytes; SVG must be a plain <svg> document
+     * without scripts, event handlers, foreign objects or external references.
+     */
+    private function isValidExternalImage(string $content, string $format): bool {
+        if ($content === '' || strlen($content) > 5 * 1024 * 1024) {
+            return false;
+        }
+
+        switch ($format) {
+            case 'png':
+                return strncmp($content, "\x89PNG\r\n\x1a\n", 8) === 0;
+            case 'gif':
+                return strncmp($content, 'GIF87a', 6) === 0 || strncmp($content, 'GIF89a', 6) === 0;
+            case 'jpg':
+            case 'jpeg':
+                return strncmp($content, "\xFF\xD8\xFF", 3) === 0;
+            case 'eps':
+                return strncmp($content, '%!PS', 4) === 0;
+            case 'svg':
+                if (!preg_match('/^\s*(<\?xml[^>]*\?>\s*)?(<!--.*?-->\s*)*(<!DOCTYPE[^>\[]*>\s*)?<svg[\s>]/is', $content)) {
+                    return false;
+                }
+                if (stripos($content, '<!ENTITY') !== false || stripos($content, '<![CDATA[') !== false) {
+                    return false;
+                }
+                // Inspect markup only: the vendor echoes the (escaped) QR payload as text in
+                // <desc>/<title>, which must not cause false positives.
+                if (!preg_match_all('/<[^>]*>/', $content, $tags)) {
+                    return false;
+                }
+                $forbiddenTag = '/^<\s*\/?\s*(script|foreignObject|iframe|object|embed|use|image|a|animate|set|handler|listener)\b/i';
+                $forbiddenAttr = '/\s(on[a-z]+|href|xlink:href|src)\s*=|javascript:|data:/i';
+                foreach ($tags[0] as $tag) {
+                    if (preg_match($forbiddenTag, $tag) || preg_match($forbiddenAttr, $tag)) {
+                        return false;
+                    }
+                }
+                return true;
+            default:
+                return false;
         }
     }
     

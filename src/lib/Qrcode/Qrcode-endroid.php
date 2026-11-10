@@ -923,12 +923,15 @@ class Qrcode {
     /**
      * Safely deletes a QR code database record and removes the corresponding image file from disk.
      *
-     * @param int $id ID of the QR code to delete.
+     * @param int|string $id ID of the QR code to delete (untrusted input is validated here).
      * @param bool $async Whether the deletion request is asynchronous (suppresses flash message).
      * @return void
      */
-    public function deleteQrcode(int $id, bool $async = false): void {
-        if ($id <= 0) {
+    public function deleteQrcode($id, bool $async = false): void {
+        // Validate instead of relying on the int type hint, which threw an
+        // uncaught TypeError (HTTP 500) for non-numeric input such as del_id=abc.
+        $id = filter_var($id, FILTER_VALIDATE_INT);
+        if ($id === false || $id <= 0) {
             if (!$async) {
                 $this->failure('QR code not found.');
             }
