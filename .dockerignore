@@ -1,2 +1,6 @@
 # Exclude specific directories
 src/install/
+
+# Never bake local secrets into the image
+.env
+.git

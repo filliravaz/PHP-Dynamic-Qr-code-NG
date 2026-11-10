@@ -12,11 +12,12 @@ services:
       DATABASE_PORT: "3306"
       DATABASE_NAME: "${MYSQL_DATABASE:-qrcode}"
       DATABASE_USER: "${MYSQL_USER:-qrcode}"
-      DATABASE_PASSWORD: "${MYSQL_PASSWORD:-changeme}"
+      DATABASE_PASSWORD: "${MYSQL_PASSWORD:?Set MYSQL_PASSWORD (e.g. in a .env file next to docker-compose.yml)}"
       DATABASE_PREFIX: "${DATABASE_PREFIX:-}"
       DATABASE_CHARSET: "${DATABASE_CHARSET:-utf8mb4}"
     ports:
-      - 80:80
+      # The container runs as non-root and listens on 8080 internally
+      - 80:8080
     depends_on:
       - php-dynamic-qrcode-db
     volumes:
@@ -82,10 +83,10 @@ services:
     ports:
       - '127.0.0.1:13306:3306'
     environment:
-      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-changeme}"
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD (e.g. in a .env file next to docker-compose.yml)}"
       MYSQL_DATABASE: "${MYSQL_DATABASE:-qrcode}"
       MYSQL_USER: "${MYSQL_USER:-qrcode}"
-      MYSQL_PASSWORD: "${MYSQL_PASSWORD:-changeme}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:?Set MYSQL_PASSWORD (e.g. in a .env file next to docker-compose.yml)}"
     networks:
       - php-dynamic-qrcode-network
 

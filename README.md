@@ -59,8 +59,17 @@ LIVE DEMO CURRENTLY NOT AVAILABLE - Will be added once this fork reaches a "stab
 
 ## Setup with docker compose
 
+> **Database passwords are required.** `docker-compose.yml` no longer ships default DB passwords. Create a `.env` file next to `docker-compose.yml` before starting the stack:
+> ```dotenv
+> MYSQL_ROOT_PASSWORD=<a long random value>
+> MYSQL_PASSWORD=<another long random value>
+> ```
+> `docker compose` will refuse to start if they are missing. **Upgrading an existing deployment** that used the old `changeme` defaults: either set both variables to `changeme` in `.env` to keep working as before, or (recommended) rotate the passwords inside MariaDB first and then put the new values in `.env`.
+
+> **Container port.** The application image runs as the unprivileged `www-data` user and listens on port **8080** inside the container. The bundled compose file maps it as `80:8080`. If you use your own port mapping, reverse proxy or Kubernetes Service, point it at container port `8080` (previously `80`).
+
 ### Option A: Run using published Docker image
-1. Download `docker-compose.yml` (database initialization and migrations are handled automatically by the application).
+1. Download `docker-compose.yml` (database initialization and migrations are handled automatically by the application) and create the `.env` file described above.
 2. Start the stack (pulls prebuilt image `ghcr.io/filliravaz/php-dynamic-qr-code-ng:latest`):
 ```bash
 docker compose up -d
