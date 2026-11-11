@@ -8,7 +8,6 @@ RUN chmod +x /usr/local/bin/install-php-extensions
 RUN DEBIAN_FRONTEND=noninteractive apt-get update -q \
     && DEBIAN_FRONTEND=noninteractive apt-get upgrade -qq -y \
     && DEBIAN_FRONTEND=noninteractive apt-get install -qq -y --no-install-recommends \
-      ca-certificates
       ca-certificates \
       curl \
       libzip-dev \
