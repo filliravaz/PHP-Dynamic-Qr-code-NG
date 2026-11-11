@@ -197,6 +197,25 @@ class Qrcode {
                 if (stripos($content, '<!ENTITY') !== false || stripos($content, '<![CDATA[') !== false) {
                     return false;
                 }
+                // Pre-filter: reject external stylesheet imports or CSS url(...) references anywhere in markup
+                if (preg_match('/@import\b|\burl\s*\(/i', $content)) {
+                    return false;
+                }
+                // Inspect all <style> text blocks and style="..." attributes for unsafe CSS
+                if (preg_match_all('/<style\b[^>]*>(.*?)<\/style>/is', $content, $styleBlocks)) {
+                    foreach ($styleBlocks[1] as $block) {
+                        if ($this->isUnsafeCss($block)) {
+                            return false;
+                        }
+                    }
+                }
+                if (preg_match_all('/\sstyle\s*=\s*["\']([^"\']*)["\']/is', $content, $styleAttrs)) {
+                    foreach ($styleAttrs[1] as $attrVal) {
+                        if ($this->isUnsafeCss($attrVal)) {
+                            return false;
+                        }
+                    }
+                }
                 // Inspect markup only: the vendor echoes the (escaped) QR payload as text in
                 // <desc>/<title>, which must not cause false positives.
                 if (!preg_match_all('/<[^>]*>/', $content, $tags)) {
@@ -235,6 +254,11 @@ class Qrcode {
                                 return false;
                             }
 
+                            // Inspect text content inside <style> elements for external URLs or @import
+                            if ($elName === 'style' && $this->isUnsafeCss($el->textContent)) {
+                                return false;
+                            }
+
                             if ($el->hasAttributes()) {
                                 foreach ($el->attributes as $attr) {
                                     $attrLocal = strtolower($attr->localName ?: $attr->nodeName);
@@ -245,6 +269,11 @@ class Qrcode {
                                     }
 
                                     if (in_array($attrLocal, ['href', 'src'], true) || in_array($attrNode, ['href', 'src', 'xlink:href'], true)) {
+                                        return false;
+                                    }
+
+                                    // Inspect attribute values (specifically style attributes) for unsafe CSS or script URIs
+                                    if ($this->isUnsafeCss($attr->value)) {
                                         return false;
                                     }
 
@@ -265,6 +294,35 @@ class Qrcode {
             default:
                 return false;
         }
+    }
+
+    /**
+     * Inspect CSS content from a <style> tag or style attribute for external
+     * references (@import, url()), executable expressions, or script protocols.
+     */
+    private function isUnsafeCss(string $css): bool {
+        $clean = html_entity_decode($css, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        // Strip CSS comments /* ... */
+        $clean = preg_replace('/\/\*.*?\*\//s', '', $clean) ?? $clean;
+
+        // Reject @import, expression(), behavior:, or -moz-binding:
+        if (preg_match('/@import\b|expression\s*\(|behavior\s*:|-moz-binding\s*:/i', $clean)) {
+            return true;
+        }
+
+        // Decode CSS hex escapes (e.g. \75\72\6c -> url) and character escapes
+        $unescaped = preg_replace_callback('/\\\\([0-9a-fA-F]{1,6}\s?)/', function($m) {
+            $code = hexdec(trim($m[1]));
+            return ($code > 0 && $code < 0x110000) ? mb_chr($code, 'UTF-8') : '';
+        }, $clean) ?? $clean;
+        $unescaped = preg_replace('/\\\\(.)/s', '$1', $unescaped) ?? $unescaped;
+
+        // Reject url(...) references, javascript:, and data: URIs
+        if (preg_match('/\burl\s*\(/i', $unescaped) || preg_match('/javascript:|data:/i', $unescaped)) {
+            return true;
+        }
+
+        return false;
     }
     
     /**
