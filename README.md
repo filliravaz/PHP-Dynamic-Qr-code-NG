@@ -9,7 +9,7 @@ This repository contains a fork of the original project [giandonatoinverso/PHP-D
 
 LIVE DEMO CURRENTLY NOT AVAILABLE - Will be added once this fork reaches a "stable" state.
 
-~~DOCUMENTATION~~ Not yet updated. Will be added in the future.
+DOCUMENTATION Available in the [Github Wiki](https://github.com/filliravaz/PHP-Dynamic-Qr-code-NG/wiki)
 
 # Features
 
