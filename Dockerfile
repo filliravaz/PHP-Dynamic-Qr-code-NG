@@ -6,10 +6,10 @@ ADD https://github.com/mlocati/docker-php-extension-installer/releases/latest/do
 RUN chmod +x /usr/local/bin/install-php-extensions
 
 RUN DEBIAN_FRONTEND=noninteractive apt-get update -q \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -qq -y \
+    && DEBIAN_FRONTEND=noninteractive apt-get upgrade -qq -y \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -qq -y --no-install-recommends \
+      ca-certificates \
       curl \
-      git \
-      less \
       libzip-dev \
       libjpeg62-turbo-dev \
       libpng-dev \
@@ -38,10 +38,14 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update -q \
     && sed -ri -e 's!AllowOverride None!AllowOverride All!g' /etc/apache2/apache2.conf \
     && echo "LimitRequestBody 10485760" > /etc/apache2/conf-available/limits.conf \
     && a2enconf limits \
+    # Hide Apache/PHP version banners
+    && sed -ri -e 's!^ServerTokens .*!ServerTokens Prod!' -e 's!^ServerSignature .*!ServerSignature Off!' /etc/apache2/conf-available/security.conf \
     && { \
         echo "upload_max_filesize = 5M"; \
         echo "post_max_size = 10M"; \
-    } > /usr/local/etc/php/conf.d/uploads.ini
+    } > /usr/local/etc/php/conf.d/uploads.ini \
+    && echo "expose_php = Off" > /usr/local/etc/php/conf.d/security.ini \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install Composer.
 ENV PATH=$PATH:/root/composer/vendor/bin \
@@ -78,5 +82,14 @@ RUN chown -R root:root /var/www/html \
     && chmod -R 755 /var/www/html \
     && chown -R www-data:www-data /var/www/html/saved_qrcode
 
-EXPOSE 80
+# Run as an unprivileged user. Non-root processes cannot bind to ports < 1024,
+# so Apache listens on 8080 inside the container (map it with e.g. "80:8080").
+RUN sed -ri -e 's!^Listen 80$!Listen 8080!' /etc/apache2/ports.conf \
+    && sed -ri -e 's!<VirtualHost \*:80>!<VirtualHost *:8080>!' /etc/apache2/sites-available/000-default.conf \
+    && mkdir -p /var/run/apache2 /var/lock/apache2 /var/log/apache2 \
+    && chown -R www-data:www-data /var/run/apache2 /var/lock/apache2 /var/log/apache2
+
+USER www-data
+
+EXPOSE 8080
 CMD ["apache2-foreground"]

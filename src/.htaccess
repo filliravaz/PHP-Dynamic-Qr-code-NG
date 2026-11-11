@@ -14,3 +14,9 @@ LimitRequestBody 10485760
     php_value upload_max_filesize 5M
     php_value post_max_size 10M
 </IfModule>
+
+# Do not expose build metadata or dependency manifests over HTTP.
+# version.json is still read server-side by getAppVersionInfo().
+<FilesMatch "^(version\.json|composer\.(json|lock))$">
+    Require all denied
+</FilesMatch>

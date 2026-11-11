@@ -31,7 +31,8 @@ if (!$qrcode) {
 if (($qrcode['state'] ?? '') === 'enable') {
     $rawLink = trim($qrcode['link'] ?? '');
     // Enforce explicit scheme allowlisting (http/https only) and issue 302 HTTP redirect
-    if (preg_match('/^https?:\/\//i', $rawLink) && filter_var($rawLink, FILTER_VALIDATE_URL)) {
+    // Same validator as create/edit (rejects userinfo), so legacy rows are re-checked too
+    if (isSafeRedirectUrl($rawLink)) {
         // Increment scan count on enabled and valid link using primary key (SEC-07 & BUG-05)
         $db->where("id", (int)$qrcode['id']);
         $db->update('dynamic_qrcodes', [

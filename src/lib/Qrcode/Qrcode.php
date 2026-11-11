@@ -112,6 +112,10 @@ class Qrcode {
 
         $filename = $this->getSafeFilePath($data_to_db['filename'], $data_to_db['format']);
 
+        // Define explicitly so the flow below never depends on failure() exiting.
+        $last_id = false;
+        $db = null;
+
         if(!file_exists($filename)){
             $queryParams = [
                 'data' => urldecode($data_to_qrcode),
@@ -134,6 +138,12 @@ class Qrcode {
             if ($content === false) {
                 $this->failure("Failed to retrieve QR code from external service.");
             }
+
+            // Never persist an unvalidated third-party response under saved_qrcode/.
+            if (!$this->isValidExternalImage($content, $data_to_db['format'])) {
+                error_log('External QR service returned unexpected content for format ' . $data_to_db['format']);
+                $this->failure("External QR service returned an invalid image.");
+            }
         
             try{
                 file_put_contents($filename, $content);
@@ -155,9 +165,164 @@ class Qrcode {
             $this->success('Qr code added successfully!');
         }
         else {
-            error_log('Insert failed: ' . $db->getLastError());
+            error_log('Insert failed: ' . ($db !== null ? $db->getLastError() : 'no database handle'));
             $this->failure('Failed to create QR code.');
         }
+    }
+
+    /**
+     * Validate that a response from the external QR API matches the requested format.
+     * Raster/EPS formats are checked by magic bytes; SVG must be a plain <svg> document
+     * without scripts, event handlers, foreign objects or external references.
+     */
+    private function isValidExternalImage(string $content, string $format): bool {
+        if ($content === '' || strlen($content) > 5 * 1024 * 1024) {
+            return false;
+        }
+
+        switch ($format) {
+            case 'png':
+                return strncmp($content, "\x89PNG\r\n\x1a\n", 8) === 0;
+            case 'gif':
+                return strncmp($content, 'GIF87a', 6) === 0 || strncmp($content, 'GIF89a', 6) === 0;
+            case 'jpg':
+            case 'jpeg':
+                return strncmp($content, "\xFF\xD8\xFF", 3) === 0;
+            case 'eps':
+                return strncmp($content, '%!PS', 4) === 0;
+            case 'svg':
+                if (!preg_match('/^\s*(<\?xml[^>]*\?>\s*)?(<!--.*?-->\s*)*(<!DOCTYPE[^>\[]*>\s*)?<svg[\s>]/is', $content)) {
+                    return false;
+                }
+                if (stripos($content, '<!ENTITY') !== false || stripos($content, '<![CDATA[') !== false) {
+                    return false;
+                }
+                // Pre-filter: reject external stylesheet imports or CSS url(...) references anywhere in markup
+                if (preg_match('/@import\b|\burl\s*\(/i', $content)) {
+                    return false;
+                }
+                // Inspect all <style> text blocks and style="..." attributes for unsafe CSS
+                if (preg_match_all('/<style\b[^>]*>(.*?)<\/style>/is', $content, $styleBlocks)) {
+                    foreach ($styleBlocks[1] as $block) {
+                        if ($this->isUnsafeCss($block)) {
+                            return false;
+                        }
+                    }
+                }
+                if (preg_match_all('/\sstyle\s*=\s*["\']([^"\']*)["\']/is', $content, $styleAttrs)) {
+                    foreach ($styleAttrs[1] as $attrVal) {
+                        if ($this->isUnsafeCss($attrVal)) {
+                            return false;
+                        }
+                    }
+                }
+                // Inspect markup only: the vendor echoes the (escaped) QR payload as text in
+                // <desc>/<title>, which must not cause false positives.
+                if (!preg_match_all('/<[^>]*>/', $content, $tags)) {
+                    return false;
+                }
+                $forbiddenTag = '/^<\s*\/?\s*(script|foreignObject|iframe|object|embed|use|image|a|animate|set|handler|listener)\b/i';
+                $forbiddenAttr = '/\s(on[a-z]+|href|xlink:href|src)\s*=|javascript:|data:/i';
+                foreach ($tags[0] as $tag) {
+                    if (preg_match($forbiddenTag, $tag) || preg_match($forbiddenAttr, $tag)) {
+                        return false;
+                    }
+                }
+
+                // Additionally parse the XML to inspect actual elements and attributes
+                if (class_exists('DOMDocument')) {
+                    $prevErrors = libxml_use_internal_errors(true);
+                    try {
+                        $dom = new DOMDocument();
+                        if (!$dom->loadXML($content, LIBXML_NONET | LIBXML_NOWARNING | LIBXML_NOERROR)) {
+                            return false;
+                        }
+
+                        $root = $dom->documentElement;
+                        if (!$root || strtolower($root->localName ?: $root->nodeName) !== 'svg') {
+                            return false;
+                        }
+
+                        $forbiddenElements = [
+                            'script', 'foreignobject', 'iframe', 'object', 'embed',
+                            'use', 'image', 'a', 'animate', 'set', 'handler', 'listener'
+                        ];
+
+                        foreach ($dom->getElementsByTagName('*') as $el) {
+                            $elName = strtolower($el->localName ?: $el->nodeName);
+                            if (in_array($elName, $forbiddenElements, true)) {
+                                return false;
+                            }
+
+                            // Inspect text content inside <style> elements for external URLs or @import
+                            if ($elName === 'style' && $this->isUnsafeCss($el->textContent)) {
+                                return false;
+                            }
+
+                            if ($el->hasAttributes()) {
+                                foreach ($el->attributes as $attr) {
+                                    $attrLocal = strtolower($attr->localName ?: $attr->nodeName);
+                                    $attrNode = strtolower($attr->nodeName);
+
+                                    if (str_starts_with($attrLocal, 'on') || str_starts_with($attrNode, 'on')) {
+                                        return false;
+                                    }
+
+                                    if (in_array($attrLocal, ['href', 'src'], true) || in_array($attrNode, ['href', 'src', 'xlink:href'], true)) {
+                                        return false;
+                                    }
+
+                                    // Inspect attribute values (specifically style attributes) for unsafe CSS or script URIs
+                                    if ($this->isUnsafeCss($attr->value)) {
+                                        return false;
+                                    }
+
+                                    $val = preg_replace('/[\x00-\x20\s]+/', '', strtolower(html_entity_decode($attr->value, ENT_QUOTES | ENT_HTML5, 'UTF-8')));
+                                    if (str_contains($val, 'javascript:') || str_contains($val, 'data:')) {
+                                        return false;
+                                    }
+                                }
+                            }
+                        }
+                    } finally {
+                        libxml_clear_errors();
+                        libxml_use_internal_errors($prevErrors);
+                    }
+                }
+
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * Inspect CSS content from a <style> tag or style attribute for external
+     * references (@import, url()), executable expressions, or script protocols.
+     */
+    private function isUnsafeCss(string $css): bool {
+        $clean = html_entity_decode($css, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        // Strip CSS comments /* ... */
+        $clean = preg_replace('/\/\*.*?\*\//s', '', $clean) ?? $clean;
+
+        // Reject @import, expression(), behavior:, or -moz-binding:
+        if (preg_match('/@import\b|expression\s*\(|behavior\s*:|-moz-binding\s*:/i', $clean)) {
+            return true;
+        }
+
+        // Decode CSS hex escapes (e.g. \75\72\6c -> url) and character escapes
+        $unescaped = preg_replace_callback('/\\\\([0-9a-fA-F]{1,6}\s?)/', function($m) {
+            $code = hexdec(trim($m[1]));
+            return ($code > 0 && $code < 0x110000) ? mb_chr($code, 'UTF-8') : '';
+        }, $clean) ?? $clean;
+        $unescaped = preg_replace('/\\\\(.)/s', '$1', $unescaped) ?? $unescaped;
+
+        // Reject url(...) references, javascript:, and data: URIs
+        if (preg_match('/\burl\s*\(/i', $unescaped) || preg_match('/javascript:|data:/i', $unescaped)) {
+            return true;
+        }
+
+        return false;
     }
     
     /**
