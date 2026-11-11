@@ -6,10 +6,9 @@ ADD https://github.com/mlocati/docker-php-extension-installer/releases/latest/do
 RUN chmod +x /usr/local/bin/install-php-extensions
 
 RUN DEBIAN_FRONTEND=noninteractive apt-get update -q \
-    # Pick up Debian security fixes not yet in the base image (e.g. zlib1g)
     && DEBIAN_FRONTEND=noninteractive apt-get upgrade -qq -y \
-    # --no-install-recommends avoids pulling openssh-client & co. into the runtime image
     && DEBIAN_FRONTEND=noninteractive apt-get install -qq -y --no-install-recommends \
+      ca-certificates
       ca-certificates \
       curl \
       libzip-dev \
